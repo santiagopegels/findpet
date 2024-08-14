@@ -1,8 +1,11 @@
 const { Router } = require('express')
 const { check } = require('express-validator')
-const { createSearch } = require('../controllers/search')
+const { createSearch, getAllSearches } = require('../controllers/search')
 
 const router = Router();
+
+router.get('/',
+  getAllSearches)
 
 router.post('/',
   [
