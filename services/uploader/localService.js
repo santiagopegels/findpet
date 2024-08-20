@@ -7,12 +7,12 @@ class LocalStorageService extends StorageService {
   async upload(file) {
     const uploadPath = path.join(local.uploadDir, 'test.png');
     const decoded = Buffer.from(file, "base64");
-    fs.writeFile(uploadPath, decoded, (err) => {
+    await fs.writeFile(uploadPath, decoded, (err) => {
       if (err) {
         throw new Error(err);
       }
   });
-    return { path: uploadPath };
+    return uploadPath;
   }
 }
 

@@ -1,16 +1,21 @@
-const Search = require('../models/search')
-const { uploadFile } = require('../services/uploader/upload')
+const Search = require('../models/search');
+const { uploadFile } = require('../services/uploader/upload');
+const { predict } = require('../services/predicter/main');
 
 const createSearch = async (req, res) => {
     try {
-        search = new Search(req.body)
+        search = new Search({
+            ...req.body,
+            imageUrl: await uploadFile(req.body.file)
+        })
         
-        const algo = await uploadFile(req.body.file);
+        console.log(await predict(req.body.file));
+        
         const searchCreated = await search.save()
-
+        
         return res.status(201).json({
             status: true,
-            queue: searchCreated
+            search: searchCreated
         });
 
     } catch (error) {

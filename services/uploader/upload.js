@@ -8,7 +8,6 @@ switch (storageConfig.storageType) {
     uploadService = localStorageService;
 }
 
-
 exports.uploadFile = async (file) => {
   try {
     return await uploadService.upload(file);
