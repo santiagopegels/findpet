@@ -1,18 +1,18 @@
 const Search = require('../models/search');
 const { uploadFile } = require('../services/uploader/upload');
-const { predict } = require('../services/predicter/main');
+const { saveImageFeature } = require('../services/predicter/saveImageFeature');
+const { getFilenameFromUrl } = require('../helpers/utils');
 
 const createSearch = async (req, res) => {
     try {
-        search = new Search({
-            ...req.body,
-            imageUrl: await uploadFile(req.body.file)
-        })
-        
-        console.log(await predict(req.body.file));
-        
-        const searchCreated = await search.save()
-        
+        search = new Search(req.body);   
+
+        const urlFile = await uploadFile(req.body.file, search.id)
+        search.filename = await getFilenameFromUrl(urlFile);        
+        const searchCreated = await search.save();
+
+        saveImageFeature(search.id);
+
         return res.status(201).json({
             status: true,
             search: searchCreated
@@ -40,6 +40,8 @@ const getAllSearches = async (req, res) => {
         console.log(error)
     }
 }
+
+// Agregar el metodo para buscar por reverse search
 
 module.exports = {
     createSearch, 

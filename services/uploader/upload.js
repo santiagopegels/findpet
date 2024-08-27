@@ -8,9 +8,9 @@ switch (storageConfig.storageType) {
     uploadService = localStorageService;
 }
 
-exports.uploadFile = async (file) => {
+exports.uploadFile = async (file, filename) => {
   try {
-    return await uploadService.upload(file);
+    return await uploadService.upload(file, filename);
   } catch (error) {
     console.log(error.message)
   }

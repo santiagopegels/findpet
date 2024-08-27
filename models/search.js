@@ -13,7 +13,7 @@ const searchSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  imageUrl: {
+  filename: {
     type: String,
     required: false
   },
