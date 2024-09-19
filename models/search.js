@@ -10,7 +10,16 @@ const searchSchema = new mongoose.Schema({
     required: true
   },
   gpsLocation: {
-    type: String,
+    type: {
+      latitude: {
+        type: Number,
+        required: true
+      },
+      longitude: {
+        type: Number,
+        required: true
+      }
+    },
     required: true
   },
   filename: {
@@ -25,7 +34,7 @@ const searchSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: ['FIND', 'LOST']
-},
+  },
   createdAt: {
     type: Date,
     default: Date.now

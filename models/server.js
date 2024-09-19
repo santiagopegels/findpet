@@ -6,6 +6,7 @@ const { dbConnection } = require('../database/config');
 class Server {
     constructor() {
         this.app = express();
+        this.app.use('/images', express.static('images'));
         this.port = process.env.PORT || 3000;
         this.server = require('http').createServer(this.app);
 

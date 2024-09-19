@@ -33,10 +33,14 @@ const getAllSearches = async (req, res) => {
         const limit = parseInt(req.query.limit) || 20;
 
         const searches = await Search.find().limit(limit);
-
+        const searchesWithImagePath = searches.map(search => ({
+            ...search.toObject(),
+            image: `${process.env.URL}:${process.env.PORT}/images/${search.filename}`
+        }));
+        
         return res.status(200).json({
             status: true,
-            searches
+            searches: searchesWithImagePath
         });
 
     } catch (error) {
