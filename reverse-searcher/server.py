@@ -14,7 +14,7 @@ fe = FeatureExtractor()
 def save():
     filename = request.get_json().get('filename')
 
-    feature = fe.extract(img=Image.open('./uploads/' + filename + '.png'))
+    feature = fe.extract(img=Image.open('./images/' + filename + '.png'))
     feature_path = Path('./feature') / (filename + ".npy")
     np.save(feature_path, feature)
     return jsonify(status=200, message="success", data=filename)
