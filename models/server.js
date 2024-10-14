@@ -2,11 +2,13 @@ const express = require('express');
 const cors = require('cors');
 
 const { dbConnection } = require('../database/config');
+const bodyParser = require('body-parser');
 
 class Server {
     constructor() {
         this.app = express();
         this.app.use('/images', express.static('images'));
+        this.app.use(bodyParser.json({ limit: '2mb' }));
         this.port = process.env.PORT || 3000;
         this.server = require('http').createServer(this.app);
 
