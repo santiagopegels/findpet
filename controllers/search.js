@@ -50,23 +50,35 @@ const getAllSearches = async (req, res) => {
 }
 
 const reverseSearch = async (req, res) => {
-    const filters = {};
-    if (req.body.city) {
-        filters.city = req.body.city;
+    try {
+        const filters = {};
+        if (req.body.city) {
+            filters.city = req.body.city;
+        }
+        if (req.body.image) {
+            const searchIdsByCity = await Search.find({ city: req.body.city }).select('_id');
+            const searchIdsArray = searchIdsByCity.map(search => search._id);
+            if (searchIdsArray.length > 10) {
+                const similarImageIds = await searchSimilarImages(req.body.image, searchIdsArray);
+                filters._id = { $in: similarImageIds };
+            }
+        }    
+
+        const searches = await Search.find(filters);
+        const searchesWithImagePath = addImagePathToSearches(searches);
+
+        return res.status(200).json({
+            status: true,
+            searches: searchesWithImagePath,
+            total: searches.length
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(400).json({
+            status: false,
+            message: error.message
+        });
     }
-    if (req.body.image) {
-        const similarImageIds = await searchSimilarImages(req.body.image);
-        filters._id = { $in: similarImageIds };
-    }    
-
-    const searches = await Search.find(filters);
-    const searchesWithImagePath = addImagePathToSearches(searches);
-
-    return res.status(200).json({
-        status: true,
-        searches: searchesWithImagePath,
-        total: searches.length
-    });
 }
 
 const addImagePathToSearches = (searches) => {
