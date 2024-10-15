@@ -11,8 +11,15 @@ class LocalStorageService extends StorageService {
       if (err) {
         throw new Error(err);
       }
-  });
+    });
     return uploadPath;
+  }
+
+  async delete(filename) {
+    const filePath = path.join(local.uploadDir, filename + '.png');
+    await fs.unlink(filePath, (err) => {
+      if (err) throw new Error(err);
+    });
   }
 }
 

@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 
 const { dbConnection } = require('../database/config');
-const bodyParser = require('body-parser');
+const initCrons = require('../crons/index');
 
 class Server {
     constructor() {
@@ -19,6 +20,7 @@ class Server {
         this.middlewares();
         this.routes();
         dbConnection();
+        initCrons();
     }
 
     middlewares() {

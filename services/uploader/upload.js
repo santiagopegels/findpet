@@ -15,3 +15,11 @@ exports.uploadFile = async (file, filename) => {
     console.log(error.message)
   }
 };
+
+exports.deleteFile = async (filename) => {
+  try {
+    return await uploadService.delete(filename);
+  } catch (error) {
+    console.log(error.message);
+  }
+};
