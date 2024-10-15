@@ -11,8 +11,8 @@ class FeatureExtractor:
         self.model = load_model('vgg16_imagenet.h5')
     def extract(self, img):
         img = img.resize((224,224)).convert("RGB")
-        x = image.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        feature = self.model.predict(x)[0]
+        imgModel = image.img_to_array(img)
+        imgModel = np.expand_dims(imgModel, axis=0)
+        imgModel = preprocess_input(imgModel)
+        feature = self.model.predict(imgModel)[0]
         return feature / np.linalg.norm(feature)

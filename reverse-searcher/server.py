@@ -23,13 +23,9 @@ def save():
 def reverse_search():
     image_data = base64.b64decode(request.get_json().get('image'))
     image = Image.open(BytesIO(image_data))
+    features_to_search_ids = request.get_json().get('ids')
 
-    features = []
-    image_ids = []
-    for feature_path in Path("./feature").glob("*.npy"):
-        features.append(np.load(feature_path))
-        image_ids.append(feature_path.stem)
-    features = np.array(features)
+    features, image_ids = _load_features(features_to_search_ids)
 
     query = fe.extract(image)
     dists = np.linalg.norm(features-query, axis=1)  # L2 distances to features
@@ -38,5 +34,15 @@ def reverse_search():
 
     return jsonify(status=200, message="success", data=search_ids)
 
+def _load_features(features_to_search_ids):
+    features = []
+    image_ids = []
+    for feature_id in features_to_search_ids:
+        feature_path = Path("./feature") / (feature_id + ".npy")
+        if feature_path.exists():
+            features.append(np.load(feature_path))
+            image_ids.append(feature_path.stem)
+    return np.array(features), image_ids
+    
 if __name__=="__main__":
     app.run("0.0.0.0")
