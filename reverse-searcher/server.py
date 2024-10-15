@@ -2,15 +2,30 @@ import numpy as np
 from PIL import Image
 from feature_extractor import FeatureExtractor
 from datetime import datetime
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, jsonify
+from functools import wraps
 from pathlib import Path
 import base64
 from io import BytesIO
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 app = Flask(__name__)
 fe = FeatureExtractor()
 
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('API_KEY')
+        if api_key and api_key == os.getenv('API_KEY'):
+            return f(*args, **kwargs)
+        else:
+            return jsonify(status=403, message="Forbidden: Invalid API_KEY"), 403
+    return decorated_function
+
 @app.route('/save-feature', methods=['POST'])
+@require_api_key
 def save():
     filename = request.get_json().get('filename')
 
@@ -20,6 +35,7 @@ def save():
     return jsonify(status=200, message="success", data=filename)
 
 @app.route('/reverse-search', methods=['POST'])
+@require_api_key
 def reverse_search():
     image_data = base64.b64decode(request.get_json().get('image'))
     image = Image.open(BytesIO(image_data))
