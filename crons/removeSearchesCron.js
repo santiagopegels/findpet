@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const Search = require('../models/search');
 const { deleteFile } = require('../services/uploader/upload');
+const { removeFeatures } = require('../services/predicter/removeFeatures');
 
 
 module.exports = removeSearchesCron = () => {
@@ -14,13 +15,16 @@ module.exports = removeSearchesCron = () => {
       const searches = await Search.find({ createdAt: { $lt: oneMonthAgo } });
       
       const searchIds = searches.map(search => search._id);
-      console.log('Ids to delete', searchIds);
       
       await Search.deleteMany({ _id: { $in: searchIds } });
+      console.log('Ids deleted', searchIds);
       
+      removeFeatures(searchIds);
+
       searches.forEach((search) => {
         deleteFile(search._id);
       });
+
     } catch (err) {
       console.error('Error removing searches:', err);
     }

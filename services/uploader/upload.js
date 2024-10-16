@@ -12,7 +12,7 @@ exports.uploadFile = async (file, filename) => {
   try {
     return await uploadService.upload(file, filename);
   } catch (error) {
-    console.log(error.message)
+    console.error(error.message)
   }
 };
 
@@ -20,6 +20,6 @@ exports.deleteFile = async (filename) => {
   try {
     return await uploadService.delete(filename);
   } catch (error) {
-    console.log(error.message);
+    console.error(error.message);
   }
 };

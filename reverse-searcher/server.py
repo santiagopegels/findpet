@@ -50,6 +50,23 @@ def reverse_search():
 
     return jsonify(status=200, message="success", data=search_ids)
 
+@app.route('/remove-features', methods=['DELETE'])
+@require_api_key
+def remove_features():
+    ids_to_remove = request.get_json().get('ids')
+    removed_ids = []
+    not_found_ids = []
+
+    for feature_id in ids_to_remove:
+        feature_path = Path("./feature") / (feature_id + ".npy")
+        if feature_path.exists():
+            feature_path.unlink()
+            removed_ids.append(feature_id)
+        else:
+            not_found_ids.append(feature_id)
+
+    return jsonify(status=200, message="success", removed=removed_ids, not_found=not_found_ids)
+
 def _load_features(features_to_search_ids):
     features = []
     image_ids = []

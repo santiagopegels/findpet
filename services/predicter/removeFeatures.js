@@ -1,10 +1,11 @@
 const axios = require('axios');
 
-exports.saveImageFeature = async (filename) => {
+exports.removeFeatures = async (ids) => {
   try {
-    const response = await axios.post(`${process.env.MACHINE_LEARNING_URL}/save-feature`, {
-      filename: filename
-    }, {
+    const response = await axios.delete(process.env.MACHINE_LEARNING_URL + '/remove-features', {
+      data: {
+        'ids': ids
+      },
       headers: {
         'API_KEY': process.env.MACHINE_LEARNING_API_KEY
       }
@@ -12,6 +13,5 @@ exports.saveImageFeature = async (filename) => {
     return response.data;
   } catch (error) {
     console.error(error);
-    return error;
   }
 };

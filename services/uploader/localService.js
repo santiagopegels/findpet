@@ -9,7 +9,8 @@ class LocalStorageService extends StorageService {
     const decoded = Buffer.from(file, "base64");
     await fs.writeFile(uploadPath, decoded, (err) => {
       if (err) {
-        throw new Error(err);
+        console.error(err);
+        return;
       }
     });
     return uploadPath;
@@ -18,7 +19,7 @@ class LocalStorageService extends StorageService {
   async delete(filename) {
     const filePath = path.join(local.uploadDir, filename + '.png');
     await fs.unlink(filePath, (err) => {
-      if (err) throw new Error(err);
+      if (err) console.error(err);
     });
   }
 }
