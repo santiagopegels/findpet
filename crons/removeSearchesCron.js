@@ -6,7 +6,7 @@ const { removeFeatures } = require('../services/predicter/removeFeatures');
 
 module.exports = removeSearchesCron = () => {
   //At 00:00 on day-of-month 1 and on Saturday.
-  cron.schedule('* * * * *', async () => {
+  cron.schedule('0 0 1 * 6', async () => {
     console.log('Running cron job to remove searches older than one month');
     try {      
       const oneMonthAgo = new Date();
