@@ -1,0 +1,36 @@
+# Docker Compose Override para Desarrollo
+# Este archivo se aplica automáticamente junto con docker-compose.yml
+
+version: '3.8'
+
+services:
+  reverse-searcher:
+    # En desarrollo, montar código fuente para hot reload
+    volumes:
+      - .:/app
+      - ./images:/app/images
+      - ./features:/app/features
+      - ./models:/app/models
+      - ./logs:/app/logs
+    
+    # Variables de entorno para desarrollo
+    environment:
+      DEBUG: "true"
+      LOG_LEVEL: "DEBUG"
+      LOG_FORMAT: "text"
+      
+    # Comando de desarrollo con auto-reload
+    command: python start.py --debug --skip-checks
+    
+    # Puertos adicionales para debugging
+    ports:
+      - "5000:5000"
+      - "5678:5678"  # Puerto para debugging
+
+  redis:
+    # En desarrollo, exponer puerto Redis
+    ports:
+      - "6379:6379"
+    
+    # Configuración más permisiva para desarrollo
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru 

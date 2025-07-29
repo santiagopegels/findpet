@@ -1,0 +1,31 @@
+# Dockerfile para cliente de testing
+FROM python:3.9-slim
+
+# Instalar dependencias para testing
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Instalar dependencias Python para testing
+COPY requirements.txt .
+RUN pip install --no-cache-dir requests pillow numpy python-dotenv
+
+# Copiar scripts de testing (crear directorio si no existe)
+RUN mkdir -p test-scripts
+
+# Script de entrada
+COPY test-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Crear directorios de trabajo
+RUN mkdir -p test-images test-results
+
+# Variables de entorno
+ENV REVERSE_SEARCHER_URL=http://reverse-searcher:5000
+ENV API_KEY=secure-test-key-change-in-production
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["test"] 
