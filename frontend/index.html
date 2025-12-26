@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Findog - Encuentra tu mascota</title>
+    <meta name="description"
+        content="Aplicación para encontrar mascotas perdidas usando reconocimiento de imágenes con IA">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🐕</span>
+                <h1>Findog</h1>
+            </div>
+            <p class="tagline">Encuentra a tu mejor amigo</p>
+        </header>
+
+        <!-- Mode Selector -->
+        <nav class="mode-selector">
+            <button class="mode-btn active" data-mode="search" id="searchModeBtn">
+                <span class="mode-icon">🔍</span>
+                <span>Buscar Mascota</span>
+            </button>
+            <button class="mode-btn" data-mode="register" id="registerModeBtn">
+                <span class="mode-icon">📝</span>
+                <span>Registrar Mascota</span>
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Camera/Image Section -->
+            <section class="camera-section">
+                <div class="camera-container" id="cameraContainer">
+                    <video id="videoPreview" autoplay playsinline></video>
+                    <img id="imagePreview" class="hidden" alt="Preview de imagen">
+                    <div class="camera-overlay" id="cameraOverlay">
+                        <span class="camera-icon">📷</span>
+                        <p>Toca para capturar</p>
+                    </div>
+                </div>
+
+                <div class="camera-controls">
+                    <button class="btn btn-secondary" id="startCameraBtn">
+                        <span>📷</span> Abrir Cámara
+                    </button>
+                    <button class="btn btn-primary hidden" id="captureBtn">
+                        <span>📸</span> Capturar
+                    </button>
+                    <button class="btn btn-secondary" id="uploadBtn">
+                        <span>📁</span> Subir Imagen
+                    </button>
+                    <button class="btn btn-danger hidden" id="resetBtn">
+                        <span>🔄</span> Nueva Foto
+                    </button>
+                </div>
+                <input type="file" id="fileInput" accept="image/*" hidden>
+            </section>
+
+            <!-- Search Form (Default Mode) -->
+            <section class="form-section" id="searchForm">
+                <h2>Buscar Mascotas Similares</h2>
+                <form id="reverseSearchForm">
+                    <div class="form-group">
+                        <label for="searchCity">Ciudad *</label>
+                        <input type="text" id="searchCity" name="city" placeholder="Ej: Buenos Aires" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full" id="searchSubmitBtn" disabled>
+                        <span>🔍</span> Buscar Mascotas Similares
+                    </button>
+                </form>
+            </section>
+
+            <!-- Register Form -->
+            <section class="form-section hidden" id="registerForm">
+                <h2>Registrar Mascota</h2>
+                <form id="petRegistrationForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="petType">Tipo *</label>
+                            <select id="petType" name="type" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="FIND">Encontré una mascota</option>
+                                <option value="LOST">Perdí mi mascota</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="regCity">Ciudad *</label>
+                            <input type="text" id="regCity" name="city" placeholder="Ej: Buenos Aires" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Descripción *</label>
+                        <textarea id="description" name="description" rows="3"
+                            placeholder="Describe la mascota: color, tamaño, raza, características especiales..."
+                            required minlength="10" maxlength="500"></textarea>
+                        <span class="char-count"><span id="descCount">0</span>/500</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone">Teléfono de contacto *</label>
+                        <input type="tel" id="phone" name="phone" placeholder="Ej: +54 11 1234-5678" required>
+                    </div>
+
+                    <div class="form-group location-group">
+                        <label>Ubicación * <small>(Hacé clic en el mapa para seleccionar)</small></label>
+                        <div class="map-container" id="mapContainer"></div>
+                        <div class="location-controls">
+                            <button type="button" class="btn btn-secondary btn-sm" id="getLocationBtn">
+                                📍 Usar mi ubicación
+                            </button>
+                            <span class="location-status" id="locationStatus"></span>
+                        </div>
+                        <input type="hidden" id="latitude" name="latitude" required>
+                        <input type="hidden" id="longitude" name="longitude" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-full" id="registerSubmitBtn" disabled>
+                        <span>✅</span> Registrar Mascota
+                    </button>
+                </form>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section hidden" id="resultsSection">
+                <h2>Resultados de Búsqueda</h2>
+                <div class="results-info" id="resultsInfo"></div>
+                <div class="results-grid" id="resultsGrid"></div>
+            </section>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay hidden" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <p id="loadingText">Procesando...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <canvas id="captureCanvas" hidden></canvas>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
