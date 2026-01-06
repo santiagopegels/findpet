@@ -13,10 +13,15 @@ class Config:
     PORT = int(os.getenv('PORT', 5000))
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     
-    # Model Configuration
-    MODEL_TYPE = os.getenv('MODEL_TYPE', 'efficientnet')  # 'efficientnet' or 'vgg16'
+    # Model Configuration - YOLOv8 + CLIP Pipeline
     MODEL_PATH = os.getenv('MODEL_PATH', './models/')
-    FEATURE_DIMENSION = 1280 if MODEL_TYPE == 'efficientnet' else 4096
+    YOLO_MODEL = os.getenv('YOLO_MODEL', 'yolov8n.pt')  # YOLOv8 nano for speed
+    CLIP_MODEL = os.getenv('CLIP_MODEL', 'clip-ViT-B-32')  # CLIP model name
+    FEATURE_DIMENSION = 512  # CLIP ViT-B-32 output dimension
+    
+    # Animal Detection Configuration (COCO dataset classes)
+    ANIMAL_CLASSES = [16, 17]  # 16 = cat, 17 = dog
+    YOLO_CONFIDENCE_THRESHOLD = float(os.getenv('YOLO_CONFIDENCE_THRESHOLD', 0.25))
     
     # Storage Configuration
     IMAGES_DIR = Path('./images')
@@ -38,6 +43,8 @@ class Config:
     # Search Configuration
     MAX_SEARCH_RESULTS = int(os.getenv('MAX_SEARCH_RESULTS', 20))
     SIMILARITY_THRESHOLD = float(os.getenv('SIMILARITY_THRESHOLD', 0.8))
+    # For L2 distance: lower is more similar, this is max distance threshold
+    MAX_L2_DISTANCE = float(os.getenv('MAX_L2_DISTANCE', 1.0))
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
@@ -51,11 +58,14 @@ class Config:
         if not cls.API_KEY or cls.API_KEY == 'default-key-change-me':
             errors.append("API_KEY debe ser configurada")
         
-        if cls.FEATURE_DIMENSION not in [1280, 4096]:
-            errors.append("FEATURE_DIMENSION debe ser 1280 (EfficientNet) o 4096 (VGG16)")
+        if cls.FEATURE_DIMENSION != 512:
+            errors.append("FEATURE_DIMENSION debe ser 512 (CLIP ViT-B-32)")
         
         if cls.MAX_IMAGE_SIZE < 1024:
             errors.append("MAX_IMAGE_SIZE debe ser al menos 1KB")
+        
+        if not cls.ANIMAL_CLASSES:
+            errors.append("ANIMAL_CLASSES debe contener al menos una clase")
         
         return errors
     
@@ -64,4 +74,4 @@ class Config:
         """Crea directorios necesarios"""
         cls.IMAGES_DIR.mkdir(exist_ok=True)
         cls.FEATURES_DIR.mkdir(exist_ok=True)
-        Path(cls.MODEL_PATH).mkdir(exist_ok=True) 
+        Path(cls.MODEL_PATH).mkdir(exist_ok=True)

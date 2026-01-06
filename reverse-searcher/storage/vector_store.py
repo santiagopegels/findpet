@@ -9,7 +9,7 @@ from utils.logger import logger
 import redis
 
 class VectorStore:
-    """Sistema de almacenamiento vectorial optimizado con FAISS"""
+    """Sistema de almacenamiento vectorial optimizado con FAISS usando distancia L2"""
     
     def __init__(self):
         self.index = None
@@ -48,16 +48,16 @@ class VectorStore:
                 else:
                     # Crear nuevo índice
                     self._create_new_index()
-                    logger.info("Nuevo índice FAISS creado")
+                    logger.info("Nuevo índice FAISS L2 creado")
             except Exception as e:
                 logger.error(f"Error inicializando índice: {e}")
                 self._create_new_index()
     
     def _create_new_index(self):
-        """Crea un nuevo índice FAISS vacío"""
-        # Usar IndexFlatIP (Inner Product) para similitud coseno
-        # Alternativa: IndexFlatL2 para distancia L2
-        self.index = faiss.IndexFlatIP(Config.FEATURE_DIMENSION)
+        """Crea un nuevo índice FAISS vacío usando distancia L2"""
+        # Usar IndexFlatL2 para distancia euclidiana
+        # Menor distancia = más similar
+        self.index = faiss.IndexFlatL2(Config.FEATURE_DIMENSION)
         self.metadata = {}
         
         # Guardar índice vacío
@@ -104,7 +104,7 @@ class VectorStore:
         """
         with self.lock:
             try:
-                # Normalizar vector para similitud coseno
+                # Normalizar vector para consistencia en búsqueda L2
                 if np.linalg.norm(feature_vector) > 0:
                     feature_vector = feature_vector / np.linalg.norm(feature_vector)
                 
@@ -147,14 +147,17 @@ class VectorStore:
     
     def search_similar(self, query_vector: np.ndarray, k: int = None) -> List[Tuple[str, float]]:
         """
-        Busca vectores similares
+        Busca vectores similares usando distancia L2.
+        
+        Para L2: menor distancia = más similar.
+        Retorna resultados ordenados de más similar a menos similar.
         
         Args:
             query_vector: Vector de consulta
             k: Número de resultados a retornar
             
         Returns:
-            Lista de (feature_id, similarity_score)
+            Lista de (feature_id, distance) ordenada por distancia ascendente
         """
         if k is None:
             k = Config.MAX_SEARCH_RESULTS
@@ -181,21 +184,23 @@ class VectorStore:
                         logger.debug("Resultado obtenido desde cache")
                         return json.loads(cached_result)
                 
-                # Buscar en FAISS
+                # Buscar en FAISS (retorna distancias L2, no similitudes)
                 k_search = min(k, self.index.ntotal)
-                similarities, indices = self.index.search(
+                distances, indices = self.index.search(
                     query_vector.astype(np.float32), 
                     k_search
                 )
                 
                 # Procesar resultados
+                # Para L2: menor distancia = más similar
+                # Filtramos por MAX_L2_DISTANCE (umbral máximo de distancia)
                 results = []
-                for idx, sim in zip(indices[0], similarities[0]):
-                    if str(idx) in self.metadata:
+                for idx, dist in zip(indices[0], distances[0]):
+                    if idx >= 0 and str(idx) in self.metadata:
                         feature_id = self.metadata[str(idx)]['feature_id']
-                        # Filtrar por umbral de similitud
-                        if sim >= Config.SIMILARITY_THRESHOLD:
-                            results.append((feature_id, float(sim)))
+                        # Filtrar por umbral de distancia máxima
+                        if dist <= Config.MAX_L2_DISTANCE:
+                            results.append((feature_id, float(dist)))
                 
                 # Guardar en cache
                 if self.redis_client and query_hash:
@@ -275,8 +280,8 @@ class VectorStore:
                         new_metadata[str(new_internal_id)] = self.metadata[str(internal_id)]
                         new_internal_id += 1
             
-            # Crear nuevo índice
-            self.index = faiss.IndexFlatIP(Config.FEATURE_DIMENSION)
+            # Crear nuevo índice L2
+            self.index = faiss.IndexFlatL2(Config.FEATURE_DIMENSION)
             self.metadata = new_metadata
             
             # Añadir vectores al nuevo índice
@@ -297,7 +302,7 @@ class VectorStore:
             return {
                 'total_vectors': self.index.ntotal,
                 'dimension': Config.FEATURE_DIMENSION,
-                'index_type': 'IndexFlatIP',
+                'index_type': 'IndexFlatL2',
                 'metadata_count': len(self.metadata),
                 'redis_enabled': self.redis_client is not None
             }
@@ -308,4 +313,4 @@ class VectorStore:
             if hasattr(self, 'index') and self.index is not None:
                 self._save_index()
         except:
-            pass 
+            pass

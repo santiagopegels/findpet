@@ -39,7 +39,6 @@ Thumbs.db
 feature/
 features/faiss_index.bin
 features/metadata.json
-models/
 images/
 logs/
 *.log

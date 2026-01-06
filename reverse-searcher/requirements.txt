@@ -1,6 +1,7 @@
 # Core ML and Image Processing
-tensorflow==2.15.0
-efficientnet==1.1.1
+ultralytics>=8.0.0
+sentence-transformers>=2.2.0
+torch>=2.0.0
 Pillow==10.1.0
 numpy==1.24.3
 
@@ -26,4 +27,4 @@ Werkzeug==3.0.1
 pytest==7.4.3
 pytest-cov==4.1.0
 black==23.11.0
-flake8==6.1.0 
+flake8==6.1.0
