@@ -41,6 +41,8 @@ features/faiss_index.bin
 features/metadata.json
 images/
 logs/
+test-images/
+test-results/
 *.log
 
 # Model files

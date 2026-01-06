@@ -199,7 +199,9 @@ class ReverseSearchServer:
                 'status': 'healthy',
                 'timestamp': time.time(),
                 'version': '2.0.0',
-                'model_type': Config.MODEL_TYPE,
+                'pipeline': 'YOLOv8 + CLIP',
+                'yolo_model': Config.YOLO_MODEL,
+                'clip_model': Config.CLIP_MODEL,
                 'vector_store_stats': self.vector_store.get_stats()
             })
         

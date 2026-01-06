@@ -19,8 +19,8 @@ class Config:
     CLIP_MODEL = os.getenv('CLIP_MODEL', 'clip-ViT-B-32')  # CLIP model name
     FEATURE_DIMENSION = 512  # CLIP ViT-B-32 output dimension
     
-    # Animal Detection Configuration (COCO dataset classes)
-    ANIMAL_CLASSES = [16, 17]  # 16 = cat, 17 = dog
+    # Animal Detection Configuration (COCO dataset classes for YOLOv8)
+    ANIMAL_CLASSES = [15, 16]  # 15 = cat, 16 = dog
     YOLO_CONFIDENCE_THRESHOLD = float(os.getenv('YOLO_CONFIDENCE_THRESHOLD', 0.25))
     
     # Storage Configuration

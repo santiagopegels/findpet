@@ -242,7 +242,7 @@ class FeatureExtractor:
             "feature_dimension": Config.FEATURE_DIMENSION,
             "animal_classes": {
                 "ids": Config.ANIMAL_CLASSES,
-                "names": ["cat", "dog"]
+                "names": ["cat (15)", "dog (16)"]
             },
             "yolo_confidence_threshold": Config.YOLO_CONFIDENCE_THRESHOLD
         }
