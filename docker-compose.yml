@@ -1,12 +1,212 @@
 version: '3.8'
 
 services:
+  # ================================
+  # MongoDB - Base de datos principal
+  # ================================
+  mongo:
+    image: mongo:7.0
+    container_name: findog-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - findog-network
+
+  # ================================
+  # Redis - Cache para ML y App
+  # ================================
+  redis:
+    image: redis:7-alpine
+    container_name: findog-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - findog-network
+
+  # ================================
+  # Reverse Searcher - Servidor ML Python
+  # ================================
+  reverse-searcher:
+    build:
+      context: ./reverse-searcher
+      dockerfile: Dockerfile
+    container_name: findog-reverse-searcher
+    ports:
+      - "5000:5000"
+    environment:
+      # API Configuration
+      API_KEY: ${API_KEY:-secure-test-key-change-in-production}
+      HOST: 0.0.0.0
+      PORT: 5000
+      DEBUG: ${DEBUG:-false}
+      
+      # Model Configuration - YOLOv8 + CLIP Pipeline
+      MODEL_PATH: ./models/
+      YOLO_MODEL: ${YOLO_MODEL:-yolov8n.pt}
+      CLIP_MODEL: ${CLIP_MODEL:-clip-ViT-B-32}
+      YOLO_CONFIDENCE_THRESHOLD: ${YOLO_CONFIDENCE_THRESHOLD:-0.25}
+      
+      # Image Processing
+      MAX_IMAGE_SIZE: ${MAX_IMAGE_SIZE:-10485760}
+      MAX_SEARCH_RESULTS: ${MAX_SEARCH_RESULTS:-20}
+      MAX_L2_DISTANCE: ${MAX_L2_DISTANCE:-1.0}
+      
+      # Redis Configuration
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    volumes:
+      # Persistir imágenes y características
+      - ./reverse-searcher/images:/app/images
+      - ./reverse-searcher/features:/app/features
+      - ./reverse-searcher/models:/app/models
+      - ./reverse-searcher/logs:/app/logs
+      # Para testing
+      - ./reverse-searcher/test-images:/app/test-images
+      - ./reverse-searcher/test-results:/app/test-results
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - findog-network
+
+  # ================================
+  # App Node.js - Backend principal
+  # ================================
   app:
     build: .
+    container_name: findog-app
     ports:
-      - "3000:3000"
+      - "3000:3005"
     volumes:
       - .:/app
+      - /app/node_modules
     environment:
       - NODE_ENV=development
-      - MONGO_DB_CONNECTION=${MONGO_DB_CONNECTION}
+      - MONGO_DB_CONNECTION=mongodb://mongo:27017/findog
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_ENABLED=true
+      - MACHINE_LEARNING_URL=http://reverse-searcher:5000
+      - MACHINE_LEARNING_API_KEY=${API_KEY:-secure-test-key-change-in-production}
+      - EXTERNAL_PORT=3000
+    depends_on:
+      mongo:
+        condition: service_healthy
+      reverse-searcher:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - findog-network
+
+  # ================================
+  # Test Client (Opcional)
+  # ================================
+  test-client:
+    build:
+      context: ./reverse-searcher
+      dockerfile: Dockerfile.test
+    container_name: findog-test-client
+    environment:
+      REVERSE_SEARCHER_URL: http://reverse-searcher:5000
+      API_KEY: ${API_KEY:-secure-test-key-change-in-production}
+    volumes:
+      - ./reverse-searcher/test-images:/app/test-images
+      - ./reverse-searcher/test-results:/app/test-results
+    depends_on:
+      - reverse-searcher
+    profiles:
+      - testing
+    networks:
+      - findog-network
+
+  # ================================
+  # Prometheus Monitoring (Opcional)
+  # ================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: findog-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./reverse-searcher/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    profiles:
+      - monitoring
+    networks:
+      - findog-network
+
+  # ================================
+  # Grafana Dashboard (Opcional)
+  # ================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: findog-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./reverse-searcher/monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
+    profiles:
+      - monitoring
+    networks:
+      - findog-network
+
+# ================================
+# Volúmenes Persistentes
+# ================================
+volumes:
+  mongo-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ================================
+# Red Interna
+# ================================
+networks:
+  findog-network:
+    driver: bridge

@@ -18,18 +18,28 @@ class CacheManager {
     }
 
     try {
+      const redisHost = process.env.REDIS_HOST || 'localhost';
+      const redisPort = parseInt(process.env.REDIS_PORT) || 6379;
+      const redisPassword = process.env.REDIS_PASSWORD || undefined;
+      const redisDb = parseInt(process.env.REDIS_DB) || 0;
+
+      // Redis v4+ usa formato de URL o socket
+      const redisUrl = `redis://${redisPassword ? `:${redisPassword}@` : ''}${redisHost}:${redisPort}/${redisDb}`;
+
       const redisConfig = {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        db: parseInt(process.env.REDIS_DB) || 0,
-        retryDelayOnFailover: 100,
-        maxRetriesPerRequest: 3,
-        retryDelayOnClusterDown: 300,
-        enableOfflineQueue: false,
-        lazyConnect: true
+        url: redisUrl,
+        socket: {
+          reconnectStrategy: (retries) => {
+            if (retries > 10) {
+              logger.warn('Max Redis reconnection attempts reached');
+              return new Error('Max reconnection attempts reached');
+            }
+            return Math.min(retries * 100, 3000);
+          }
+        }
       };
 
+      logger.info(`Connecting to Redis at ${redisHost}:${redisPort}`);
       this.client = redis.createClient(redisConfig);
 
       // Event listeners
@@ -40,9 +50,9 @@ class CacheManager {
       this.client.on('ready', () => {
         this.isConnected = true;
         logAppEvent('REDIS_CONNECTED', {
-          host: redisConfig.host,
-          port: redisConfig.port,
-          db: redisConfig.db
+          host: redisHost,
+          port: redisPort,
+          db: redisDb
         });
         logger.info('✅ Redis client ready');
       });
@@ -141,11 +151,11 @@ class CacheManager {
     try {
       const startTime = Date.now();
       const serializedData = JSON.stringify(data);
-      
+
       await this.client.setEx(key, ttlSeconds, serializedData);
-      
+
       const duration = Date.now() - startTime;
-      
+
       logAppEvent('CACHE_SET', {
         key,
         ttl: ttlSeconds,
@@ -174,7 +184,7 @@ class CacheManager {
 
     try {
       const result = await this.client.del(key);
-      
+
       logAppEvent('CACHE_DELETE', {
         key,
         deleted: result > 0
@@ -206,7 +216,7 @@ class CacheManager {
       }
 
       const result = await this.client.del(keys);
-      
+
       logAppEvent('CACHE_DELETE_PATTERN', {
         pattern,
         keysFound: keys.length,
@@ -308,10 +318,10 @@ class CacheManager {
     try {
       const info = await this.client.info('memory');
       const keyspace = await this.client.info('keyspace');
-      
+
       // Contar claves de nuestra aplicación
       const appKeys = await this.client.keys('findog:*');
-      
+
       return {
         available: true,
         connected: this.isConnected,
@@ -334,14 +344,14 @@ class CacheManager {
   parseRedisInfo(info) {
     const lines = info.split('\r\n');
     const result = {};
-    
+
     for (const line of lines) {
       if (line.includes(':')) {
         const [key, value] = line.split(':');
         result[key] = value;
       }
     }
-    
+
     return result;
   }
 
@@ -350,7 +360,7 @@ class CacheManager {
    */
   async flushAppCache() {
     const deleted = await this.delPattern('findog:*');
-    
+
     logAppEvent('CACHE_FLUSHED', {
       keysDeleted: deleted
     });

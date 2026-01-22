@@ -1,9 +1,13 @@
 const rateLimit = require('express-rate-limit');
 
+// Verificar si estamos en desarrollo
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 // Rate limiter general para todas las rutas
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // máximo 100 requests por IP en 15 minutos
+  max: isDevelopment ? 10000 : 100, // 10000 en dev, 100 en prod por IP en 15 minutos
+  skip: () => isDevelopment, // Saltar completamente en desarrollo
   message: {
     status: false,
     error: 'TOO_MANY_REQUESTS',

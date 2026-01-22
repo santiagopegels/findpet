@@ -8,7 +8,7 @@ const securityHeaders = helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
       scriptSrc: ["'self'", "https://unpkg.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*.tile.openstreetmap.org"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.tile.openstreetmap.org", "http://localhost:3005"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],

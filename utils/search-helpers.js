@@ -15,20 +15,23 @@ const addImagePathToSearches = (searches, baseUrl = null) => {
     return [];
   }
 
-  const serverUrl = baseUrl || `${process.env.URL || 'http://localhost'}:${process.env.PORT || 3000}`;
-  
+  // Use EXTERNAL_PORT for URLs that will be accessed from the browser
+  // The internal PORT may differ from the external mapped port (e.g., 3005 internal -> 3000 external)
+  const externalPort = process.env.EXTERNAL_PORT || process.env.PORT || 3000;
+  const serverUrl = baseUrl || `${process.env.URL || 'http://localhost'}:${externalPort}`;
+
   return searches.map(search => {
     const searchObject = search.toObject ? search.toObject() : search;
-    
+
     return {
       ...searchObject,
       // Construir URL completa de la imagen
-      imageUrl: searchObject.filename 
-        ? `${serverUrl}/images/${searchObject.filename}` 
+      imageUrl: searchObject.filename
+        ? `${serverUrl}/images/${searchObject.filename}`
         : null,
       // Mantener compatibilidad con campo anterior
-      image: searchObject.filename 
-        ? `${serverUrl}/images/${searchObject.filename}` 
+      image: searchObject.filename
+        ? `${serverUrl}/images/${searchObject.filename}`
         : null
     };
   });
@@ -39,25 +42,25 @@ const addImagePathToSearches = (searches, baseUrl = null) => {
  */
 const buildSearchFilters = (query) => {
   const filters = {};
-  
+
   // Filtro por ciudad (case insensitive)
   if (query.city) {
     filters.city = new RegExp(query.city.trim(), 'i');
   }
-  
+
   // Filtro por tipo
   if (query.type && ['FIND', 'LOST'].includes(query.type.toUpperCase())) {
     filters.type = query.type.toUpperCase();
   }
-  
+
   // Filtro por rango de fechas
   if (query.dateFrom || query.dateTo) {
     filters.createdAt = {};
-    
+
     if (query.dateFrom) {
       filters.createdAt.$gte = new Date(query.dateFrom);
     }
-    
+
     if (query.dateTo) {
       const dateTo = new Date(query.dateTo);
       // Incluir todo el día
@@ -65,12 +68,12 @@ const buildSearchFilters = (query) => {
       filters.createdAt.$lte = dateTo;
     }
   }
-  
+
   // Filtro por teléfono (para evitar duplicados)
   if (query.phone) {
     filters.phone = query.phone.replace(/[^\d+]/g, ''); // Normalizar teléfono
   }
-  
+
   return filters;
 };
 
@@ -81,7 +84,7 @@ const normalizePaginationParams = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit) || 21, 1), 100); // Entre 1 y 100
   const page = Math.max(parseInt(query.page) || 1, 1); // Mínimo 1
   const skip = (page - 1) * limit;
-  
+
   return { limit, page, skip };
 };
 
@@ -92,7 +95,7 @@ const buildPaginationResponse = (results, totalCount, { limit, page, skip }) => 
   const pages = Math.ceil(totalCount / limit);
   const hasNext = skip + results.length < totalCount;
   const hasPrev = page > 1;
-  
+
   return {
     total: totalCount,
     page: page,
@@ -119,7 +122,7 @@ const executeSearchWithCache = async (cacheKey, searchFunction, ttl = 300) => {
       cacheKey,
       error: error.message
     });
-    
+
     return await searchFunction();
   }
 };
@@ -130,14 +133,14 @@ const executeSearchWithCache = async (cacheKey, searchFunction, ttl = 300) => {
 const validateGPSCoordinates = (latitude, longitude) => {
   const lat = parseFloat(latitude);
   const lng = parseFloat(longitude);
-  
+
   const isValidLat = !isNaN(lat) && lat >= -90 && lat <= 90;
   const isValidLng = !isNaN(lng) && lng >= -180 && lng <= 180;
-  
+
   if (!isValidLat || !isValidLng) {
     throw new Error(`Coordenadas GPS inválidas: lat=${lat}, lng=${lng}`);
   }
-  
+
   return { latitude: lat, longitude: lng };
 };
 
@@ -149,14 +152,14 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
   const R = 6371; // Radio de la Tierra en km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
-  
+
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c;
-  
+
   return Math.round(distance * 100) / 100; // Redondear a 2 decimales
 };
 
@@ -166,7 +169,7 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
 const findNearbySearches = async (SearchModel, latitude, longitude, radiusKm = 5, limit = 50) => {
   try {
     validateGPSCoordinates(latitude, longitude);
-    
+
     const searches = await SearchModel.find({
       gpsLocation: {
         $near: {
@@ -178,14 +181,14 @@ const findNearbySearches = async (SearchModel, latitude, longitude, radiusKm = 5
         }
       }
     })
-    .limit(limit)
-    .sort({ createdAt: -1 });
+      .limit(limit)
+      .sort({ createdAt: -1 });
 
     // Agregar distancia a cada resultado
     return searches.map(search => {
       const searchObj = search.toObject();
       const [searchLng, searchLat] = search.gpsLocation.coordinates;
-      
+
       return {
         ...searchObj,
         distance: calculateDistance(latitude, longitude, searchLat, searchLng)
@@ -208,16 +211,16 @@ const findNearbySearches = async (SearchModel, latitude, longitude, radiusKm = 5
  */
 const findPossibleDuplicates = async (SearchModel, searchData) => {
   const filters = [];
-  
+
   // Buscar por mismo teléfono
   if (searchData.phone) {
     filters.push({ phone: searchData.phone });
   }
-  
+
   // Buscar por coordenadas muy cercanas (menos de 100m)
   if (searchData.gpsLocation) {
     const { latitude, longitude } = searchData.gpsLocation;
-    
+
     filters.push({
       gpsLocation: {
         $near: {
@@ -230,23 +233,23 @@ const findPossibleDuplicates = async (SearchModel, searchData) => {
       }
     });
   }
-  
+
   if (filters.length === 0) {
     return [];
   }
-  
+
   try {
     // Buscar en las últimas 24 horas
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
+
     const duplicates = await SearchModel.find({
       $or: filters,
       createdAt: { $gte: yesterday },
       type: searchData.type
     }).limit(5);
-    
+
     return duplicates;
-    
+
   } catch (error) {
     logger.error('Error finding duplicates', {
       error: error.message,
@@ -265,18 +268,18 @@ const formatApiResponse = (success, data, message = null, meta = {}) => {
     timestamp: new Date().toISOString(),
     ...meta
   };
-  
+
   if (message) {
     response.message = message;
   }
-  
+
   if (success) {
     Object.assign(response, data);
   } else {
     response.error = data.error || 'UNKNOWN_ERROR';
     response.message = data.message || message || 'Error desconocido';
   }
-  
+
   return response;
 };
 
@@ -287,7 +290,7 @@ const buildSortParams = (query) => {
   const validSortFields = ['createdAt', 'city', 'type'];
   const sortField = validSortFields.includes(query.sortBy) ? query.sortBy : 'createdAt';
   const sortOrder = query.sortOrder === 'asc' ? 1 : -1;
-  
+
   return { [sortField]: sortOrder };
 };
 
@@ -296,7 +299,7 @@ const buildSortParams = (query) => {
  */
 const getSearchStats = async (SearchModel, filters = {}) => {
   const cacheKey = CacheUtils.keys.searchCount(filters);
-  
+
   return await executeSearchWithCache(
     cacheKey,
     async () => {
@@ -320,7 +323,7 @@ const getSearchStats = async (SearchModel, filters = {}) => {
           }
         }
       ]);
-      
+
       return stats.length > 0 ? stats[0] : {
         total: 0,
         findCount: 0,
