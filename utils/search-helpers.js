@@ -9,6 +9,7 @@ const { cacheManager, CacheUtils } = require('./cache');
 /**
  * Agregar path de imagen a las búsquedas
  * Función centralizada que antes estaba duplicada
+ * Ahora incluye URLs para las diferentes versiones de imagen
  */
 const addImagePathToSearches = (searches, baseUrl = null) => {
   if (!Array.isArray(searches)) {
@@ -23,16 +24,34 @@ const addImagePathToSearches = (searches, baseUrl = null) => {
   return searches.map(search => {
     const searchObject = search.toObject ? search.toObject() : search;
 
+    // Construir URLs para todas las versiones de imagen
+    let imageUrls = null;
+    if (searchObject.imageVersions) {
+      imageUrls = {
+        thumbnail: searchObject.imageVersions.thumbnail
+          ? `${serverUrl}/images/${searchObject.imageVersions.thumbnail}`
+          : null,
+        medium: searchObject.imageVersions.medium
+          ? `${serverUrl}/images/${searchObject.imageVersions.medium}`
+          : null,
+        large: searchObject.imageVersions.large
+          ? `${serverUrl}/images/${searchObject.imageVersions.large}`
+          : null
+      };
+    }
+
     return {
       ...searchObject,
-      // Construir URL completa de la imagen
-      imageUrl: searchObject.filename
+      // URLs para todas las versiones
+      imageUrls: imageUrls,
+      // URL principal (medium por defecto) para compatibilidad
+      imageUrl: imageUrls?.medium || (searchObject.filename
         ? `${serverUrl}/images/${searchObject.filename}`
-        : null,
+        : null),
       // Mantener compatibilidad con campo anterior
-      image: searchObject.filename
+      image: imageUrls?.medium || (searchObject.filename
         ? `${serverUrl}/images/${searchObject.filename}`
-        : null
+        : null)
     };
   });
 };

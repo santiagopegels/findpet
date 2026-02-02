@@ -3,35 +3,35 @@ const { uploadFile } = require('../services/uploader/upload');
 const { saveImageFeature } = require('../services/predicter/saveImageFeature');
 const { searchSimilarImages } = require('../services/predicter/searchSimilarImages');
 const { getFilenameFromUrl } = require('../helpers/utils');
-const { 
-  logger, 
-  logDatabaseError, 
-  logExternalServiceError, 
-  logAppEvent,
-  logPerformanceWarning 
+const {
+    logger,
+    logDatabaseError,
+    logExternalServiceError,
+    logAppEvent,
+    logPerformanceWarning
 } = require('../utils/logger');
-const { 
-  createError, 
-  normalizeMongooseError, 
-  normalizeAxiosError 
+const {
+    createError,
+    normalizeMongooseError,
+    normalizeAxiosError
 } = require('../utils/errors');
 const { cacheManager, CacheUtils } = require('../utils/cache');
 const {
-  addImagePathToSearches,
-  buildSearchFilters,
-  normalizePaginationParams,
-  buildPaginationResponse,
-  executeSearchWithCache,
-  findPossibleDuplicates,
-  formatApiResponse,
-  buildSortParams,
-  getSearchStats
+    addImagePathToSearches,
+    buildSearchFilters,
+    normalizePaginationParams,
+    buildPaginationResponse,
+    executeSearchWithCache,
+    findPossibleDuplicates,
+    formatApiResponse,
+    buildSortParams,
+    getSearchStats
 } = require('../utils/search-helpers');
 const { config } = require('../config/app-config');
 
 const createSearch = async (req, res, next) => {
     const startTime = Date.now();
-    
+
     try {
         logAppEvent('SEARCH_CREATE_INITIATED', {
             city: req.body.city,
@@ -54,28 +54,38 @@ const createSearch = async (req, res, next) => {
 
         // Usar la imagen validada del middleware
         const imageData = req.validatedImage ? req.validatedImage.base64Data : req.body.image.split(',')[1];
-        
-        // Subir archivo con validación mejorada
-        let urlFile;
+
+        // Subir y procesar archivo generando múltiples versiones optimizadas
+        let uploadResult;
         try {
-            urlFile = await uploadFile(imageData, search.id);
-            
-            // Validar que el archivo existe físicamente
-            const fs = require('fs');
-            if (!fs.existsSync(urlFile)) {
-                throw new Error('Archivo no creado en el sistema de archivos');
+            uploadResult = await uploadFile(imageData, search.id);
+
+            // Validar que se generaron las versiones
+            if (!uploadResult || !uploadResult.versions) {
+                throw new Error('No se pudieron generar las versiones de la imagen');
             }
-            
-            search.filename = getFilenameFromUrl(urlFile);
+
+            // Guardar el nombre base del archivo y las versiones
+            search.filename = uploadResult.baseFilename;
+            search.imageVersions = uploadResult.versions;
+
+            logAppEvent('IMAGE_PROCESSED', {
+                searchId: search.id,
+                versions: uploadResult.versions,
+                sizes: uploadResult.sizes,
+                originalSize: `${(req.validatedImage?.originalSize / 1024).toFixed(2)} KB`
+            });
+
         } catch (error) {
-            throw createError.file('Error al guardar la imagen', 'upload', search.id);
+            console.error('Error al subir/procesar imagen:', error);
+            throw createError.file('Error al guardar y procesar la imagen', 'upload', search.id);
         }
-        
+
         // Validar que el filename se asignó correctamente
         if (!search.filename) {
             throw createError.file('El nombre del archivo no se generó correctamente', 'filename_generation', search.id);
         }
-        
+
         // Guardar en base de datos
         let searchCreated;
         try {
@@ -97,7 +107,7 @@ const createSearch = async (req, res, next) => {
         });
 
         const duration = Date.now() - startTime;
-        
+
         // Warning si tardó mucho
         if (duration > config.search.performance.slowQueryThreshold) {
             logPerformanceWarning('createSearch', duration, config.search.performance.slowQueryThreshold);
@@ -125,7 +135,7 @@ const createSearch = async (req, res, next) => {
                     mimeType: req.validatedImage.mimeType
                 } : null,
                 // Incluir duplicados si los hay (para información del usuario)
-                possibleDuplicates: possibleDuplicates.length > 0 ? 
+                possibleDuplicates: possibleDuplicates.length > 0 ?
                     addImagePathToSearches(possibleDuplicates) : []
             }
         }, 'Búsqueda creada exitosamente', {
@@ -135,14 +145,14 @@ const createSearch = async (req, res, next) => {
 
     } catch (error) {
         const duration = Date.now() - startTime;
-        
+
         logAppEvent('SEARCH_CREATE_FAILED', {
             city: req.body.city,
             type: req.body.type,
             error: error.message,
             duration: `${duration}ms`
         });
-        
+
         // Pasar el error al middleware centralizado
         next(error);
     }
@@ -150,13 +160,13 @@ const createSearch = async (req, res, next) => {
 
 const getAllSearches = async (req, res, next) => {
     const startTime = Date.now();
-    
+
     try {
         // Usar utilidades centralizadas para normalizar parámetros
         const paginationParams = normalizePaginationParams(req.query);
         const filters = buildSearchFilters(req.query);
         const sortParams = buildSortParams(req.query);
-        
+
         logAppEvent('GET_ALL_SEARCHES_INITIATED', {
             page: paginationParams.page,
             limit: paginationParams.limit,
@@ -239,14 +249,14 @@ const getAllSearches = async (req, res, next) => {
 
     } catch (error) {
         const duration = Date.now() - startTime;
-        
+
         logAppEvent('GET_ALL_SEARCHES_FAILED', {
             page: req.query.page,
             limit: req.query.limit,
             error: error.message,
             duration: `${duration}ms`
         });
-        
+
         // Pasar el error al middleware centralizado
         next(error);
     }
@@ -254,7 +264,7 @@ const getAllSearches = async (req, res, next) => {
 
 const reverseSearch = async (req, res, next) => {
     const startTime = Date.now();
-    
+
     try {
         const { city, image } = req.body;
         let searchMethod = 'city';
@@ -266,8 +276,8 @@ const reverseSearch = async (req, res, next) => {
         });
 
         // Construir cache key para esta búsqueda
-        const cacheKey = CacheUtils.keys.reverseSearch({ 
-            city, 
+        const cacheKey = CacheUtils.keys.reverseSearch({
+            city,
             hasImage: !!image,
             imageHash: image ? require('crypto').createHash('md5').update(image.substring(0, 100)).digest('hex') : null
         });
@@ -294,9 +304,9 @@ const reverseSearch = async (req, res, next) => {
             } catch (error) {
                 throw createError.database('Error al buscar por ciudad', 'find', error);
             }
-            
+
             const searchIdsArray = searchIdsByCity.map(search => search._id);
-            
+
             // CORREGIR BUG: Buscar similitud si hay al menos 1 imagen (no 10)
             if (searchIdsArray.length > 0) {
                 try {
@@ -306,11 +316,11 @@ const reverseSearch = async (req, res, next) => {
                     });
 
                     const similarImageIds = await searchSimilarImages(image, searchIdsArray);
-                    
+
                     if (similarImageIds && similarImageIds.length > 0) {
                         filters._id = { $in: similarImageIds };
                         searchMethod = 'ai_similarity';
-                        
+
                         logAppEvent('ML_SIMILARITY_SEARCH_SUCCESS', {
                             city,
                             similarCount: similarImageIds.length,
@@ -327,7 +337,7 @@ const reverseSearch = async (req, res, next) => {
                         city,
                         candidateCount: searchIdsArray.length
                     });
-                    
+
                     // Si falla ML, continuar con búsqueda por ciudad
                     searchMethod = 'city_fallback';
                 }
@@ -354,7 +364,7 @@ const reverseSearch = async (req, res, next) => {
         } catch (error) {
             throw createError.database('Error al ejecutar búsqueda', 'find', error);
         }
-            
+
         const searchesWithImagePath = addImagePathToSearches(searches);
         const pagination = buildPaginationResponse(searches, totalCount, paginationParams);
         const duration = Date.now() - startTime;
@@ -391,14 +401,14 @@ const reverseSearch = async (req, res, next) => {
 
     } catch (error) {
         const duration = Date.now() - startTime;
-        
+
         logAppEvent('REVERSE_SEARCH_FAILED', {
             city: req.body.city,
             hasImage: !!req.body.image,
             error: error.message,
             duration: `${duration}ms`
         });
-        
+
         // Pasar el error al middleware centralizado
         next(error);
     }

@@ -26,6 +26,15 @@ const searchSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  imageVersions: {
+    type: {
+      thumbnail: String,
+      medium: String,
+      large: String
+    },
+    required: false,
+    default: null
+  },
   phone: {
     type: String,
     required: true

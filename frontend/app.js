@@ -193,7 +193,7 @@ elements.clearFiltersBtn.addEventListener('click', clearFilters);
 // Image Upload Functions
 // ====================================
 
-function handleFileSelect(file) {
+async function handleFileSelect(file) {
     if (!file) return;
 
     // Validate file type
@@ -202,23 +202,34 @@ function handleFileSelect(file) {
         return;
     }
 
-    // Validate file size (5MB max)
+    // Validate file size (5MB max antes de comprimir)
     if (file.size > 5 * 1024 * 1024) {
         showToast('La imagen no debe superar 5MB', 'error');
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        state.reverseSearch.image = e.target.result;
-        elements.imagePreview.src = e.target.result;
+    try {
+        showLoading('Comprimiendo imagen...');
+
+        // Comprimir la imagen antes de mostrarla
+        const compressedDataUrl = await ImageCompressor.compressImage(file);
+
+        state.reverseSearch.image = compressedDataUrl;
+        elements.imagePreview.src = compressedDataUrl;
         elements.imagePreview.classList.remove('hidden');
         elements.uploadPlaceholder.classList.add('hidden');
         elements.removeImageBtn.classList.remove('hidden');
         elements.uploadArea.classList.add('has-image');
         updateReverseSearchButton();
-    };
-    reader.readAsDataURL(file);
+
+        hideLoading();
+        showToast('Imagen comprimida y lista para subir', 'success');
+
+    } catch (error) {
+        console.error('Error comprimiendo imagen:', error);
+        showToast('Error al procesar la imagen: ' + error.message, 'error');
+        hideLoading();
+    }
 }
 
 function removeImage() {
@@ -409,11 +420,24 @@ function createPetCard(pet) {
 
     const typeLabel = pet.type === 'LOST' ? 'Perdido' : 'Encontrado';
     const typeClass = pet.type === 'LOST' ? 'lost' : 'found';
-    const imageUrl = pet.imageUrl || pet.image || '/images/placeholder.png';
+
+    // Usar thumbnails para el grid (mucho más rápido)
+    const thumbnailUrl = pet.imageUrls?.thumbnail || pet.imageUrl || pet.image || '/images/placeholder.png';
+    const mediumUrl = pet.imageUrls?.medium || pet.imageUrl || pet.image || '/images/placeholder.png';
+    const largeUrl = pet.imageUrls?.large || pet.imageUrl || pet.image || '/images/placeholder.png';
 
     card.innerHTML = `
         <div class="pet-card-image">
-            <img src="${imageUrl}" alt="Imagen de mascota" loading="lazy" class="pet-image">
+            <img 
+                src="${thumbnailUrl}" 
+                data-medium="${mediumUrl}"
+                data-large="${largeUrl}"
+                alt="Imagen de mascota" 
+                loading="lazy" 
+                class="pet-image"
+                srcset="${thumbnailUrl} 300w, ${mediumUrl} 800w, ${largeUrl} 1200w"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            >
             <span class="pet-card-badge ${typeClass}">${typeLabel}</span>
         </div>
         <div class="pet-card-content">
