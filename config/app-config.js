@@ -22,11 +22,11 @@ const config = {
     host: process.env.HOST || '0.0.0.0',
     nodeEnv: process.env.NODE_ENV || 'development',
     baseUrl: process.env.URL || 'http://localhost',
-    
+
     // Timeouts y límites
     requestTimeout: 30000, // 30 segundos
     bodyLimit: '6mb',
-    
+
     // CORS configuration
     cors: {
       origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
@@ -34,7 +34,7 @@ const config = {
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'User-Agent']
     },
-    
+
     // Configuración de shutdown graceful
     gracefulShutdown: {
       timeout: 10000 // 10 segundos
@@ -45,8 +45,6 @@ const config = {
   database: {
     uri: process.env.MONGO_DB_CONNECTION,
     options: {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
       serverSelectionTimeoutMS: parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 5000,
       socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 45000,
@@ -54,7 +52,7 @@ const config = {
       retryWrites: true,
       retryReads: true
     },
-    
+
     // Configuración de índices
     indexing: {
       background: true,
@@ -69,14 +67,14 @@ const config = {
     port: parseInt(process.env.REDIS_PORT) || 6379,
     password: process.env.REDIS_PASSWORD || undefined,
     db: parseInt(process.env.REDIS_DB) || 0,
-    
+
     // Configuración de conexión
     retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
     retryDelayOnClusterDown: 300,
     enableOfflineQueue: false,
     lazyConnect: true,
-    
+
     // TTL por defecto para diferentes tipos de cache
     ttl: {
       default: parseInt(process.env.CACHE_TTL) || 300, // 5 minutos
@@ -95,7 +93,7 @@ const config = {
     timeout: parseInt(process.env.ML_TIMEOUT) || 30000,
     retries: parseInt(process.env.ML_RETRIES) || 3,
     retryDelay: parseInt(process.env.ML_RETRY_DELAY) || 1000,
-    
+
     endpoints: {
       saveFeature: '/save-feature',
       reverseSearch: '/reverse-search',
@@ -108,18 +106,18 @@ const config = {
     // Directorio de imágenes
     imagesDir: path.resolve(process.env.IMAGES_DIR || './images'),
     uploadsDir: path.resolve(process.env.UPLOADS_DIR || './uploads'),
-    
+
     // Límites de imágenes
     maxSize: parseInt(process.env.MAX_IMAGE_SIZE) || 5 * 1024 * 1024, // 5MB
     allowedTypes: ['jpg', 'jpeg', 'png', 'webp'],
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-    
+
     // Dimensiones
     minWidth: 100,
     minHeight: 100,
     maxWidth: 4000,
     maxHeight: 4000,
-    
+
     // Configuración de almacenamiento
     storage: {
       type: process.env.STORAGE_TYPE || 'local',
@@ -135,19 +133,19 @@ const config = {
     rateLimit: {
       windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 15 * 60 * 1000, // 15 minutos
       max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
-      
+
       // Rate limits específicos
       upload: {
         windowMs: parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW) || 60 * 60 * 1000, // 1 hora
         max: parseInt(process.env.UPLOAD_RATE_LIMIT_MAX) || 10
       },
-      
+
       reverseSearch: {
         windowMs: parseInt(process.env.REVERSE_SEARCH_RATE_LIMIT_WINDOW) || 60 * 60 * 1000, // 1 hora
         max: parseInt(process.env.REVERSE_SEARCH_RATE_LIMIT_MAX) || 20
       }
     },
-    
+
     // Headers de seguridad
     headers: {
       hsts: {
@@ -155,7 +153,7 @@ const config = {
         includeSubDomains: true,
         preload: true
       },
-      
+
       csp: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
@@ -168,7 +166,7 @@ const config = {
         frameSrc: ["'none'"]
       }
     },
-    
+
     // User-Agents bloqueados
     blockedUserAgents: [
       /sqlmap/i,
@@ -188,10 +186,10 @@ const config = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     format: process.env.LOG_FORMAT || 'json',
-    
+
     // Directorios
     logsDir: path.resolve(process.env.LOGS_DIR || './logs'),
-    
+
     // Configuración de archivos
     files: {
       error: {
@@ -228,20 +226,20 @@ const config = {
       maxLimit: 100,
       minLimit: 1
     },
-    
+
     // Filtros
     filters: {
       validSortFields: ['createdAt', 'city', 'type'],
       validTypes: ['FIND', 'LOST']
     },
-    
+
     // Búsqueda geográfica
     geo: {
       defaultRadius: 5, // km
       maxRadius: 50, // km
       minRadius: 0.1 // km
     },
-    
+
     // Performance
     performance: {
       slowQueryThreshold: 2000, // 2 segundos
@@ -274,7 +272,7 @@ const config = {
       filesystem: true,
       mlService: false // Opcional por defecto
     },
-    
+
     intervals: {
       basic: 30000, // 30 segundos
       detailed: 60000, // 1 minuto
@@ -286,9 +284,10 @@ const config = {
   paths: {
     api: {
       search: '/api/search',
-      health: '/health'
+      health: '/health',
+      georef: '/api/georef'
     },
-    
+
     static: {
       images: '/images'
     }

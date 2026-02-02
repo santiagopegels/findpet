@@ -74,6 +74,7 @@ class Server {
 
   initializeRoutes() {
     this.app.use(this.paths.search, require('../routes/search'));
+    this.app.use(this.paths.georef, require('../routes/georef.routes'));
     this.app.use(config.paths.api.health, require('../routes/health'));
   }
 
