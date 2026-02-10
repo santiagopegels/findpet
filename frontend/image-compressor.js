@@ -111,18 +111,27 @@ const ImageCompressor = {
         };
     },
 
+    // Cache para el formato soportado (se detecta solo una vez)
+    _cachedFormat: null,
+
     /**
-     * Detecta el formato de imagen soportado por el navegador
+     * Detecta el formato de imagen soportado por el navegador (cacheado)
      */
     getSupportedFormat() {
-        // Detectar soporte de WebP
+        // Usar cache si ya se detectó
+        if (this._cachedFormat) {
+            return this._cachedFormat;
+        }
+
+        // Detectar soporte de WebP solo una vez
         const canvas = document.createElement('canvas');
         canvas.width = 1;
         canvas.height = 1;
 
         const webpSupported = canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
 
-        return webpSupported ? this.config.targetFormat : this.config.fallbackFormat;
+        this._cachedFormat = webpSupported ? this.config.targetFormat : this.config.fallbackFormat;
+        return this._cachedFormat;
     },
 
     /**
@@ -141,6 +150,45 @@ const ImageCompressor = {
     validateSize(file, maxSizeMB = 5) {
         const maxBytes = maxSizeMB * 1024 * 1024;
         return file.size <= maxBytes;
+    },
+
+    /**
+     * Valida que la imagen sea vertical (portrait)
+     * @param {File} file - Archivo de imagen a validar
+     * @returns {Promise<{isValid: boolean, width: number, height: number, orientation: string}>}
+     */
+    async validateOrientation(file) {
+        return new Promise((resolve, reject) => {
+            if (!file.type.startsWith('image/')) {
+                reject(new Error('El archivo no es una imagen'));
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('Error al leer el archivo'));
+
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onerror = () => reject(new Error('Error al cargar la imagen'));
+
+                img.onload = () => {
+                    const isVertical = img.height > img.width;
+                    const orientation = isVertical ? 'vertical' : 'horizontal';
+
+                    resolve({
+                        isValid: isVertical,
+                        width: img.width,
+                        height: img.height,
+                        orientation: orientation,
+                        aspectRatio: (img.width / img.height).toFixed(2)
+                    });
+                };
+
+                img.src = e.target.result;
+            };
+
+            reader.readAsDataURL(file);
+        });
     }
 };
 

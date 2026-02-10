@@ -12,12 +12,8 @@ const path = require('path');
 const API_URL = process.env.API_URL || 'http://localhost:3000';
 const TEST_IMAGES_DIR = path.join(__dirname, '../reverse-searcher/test-images');
 
-// Datos de ejemplo para generar mascotas aleatorias
-const CITIES = [
-    'Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'La Plata',
-    'San Miguel de Tucumán', 'Mar del Plata', 'Salta', 'Santa Fe', 'Posadas',
-    'Misiones', 'Resistencia', 'Neuquén', 'Bariloche', 'Ushuaia'
-];
+// ID de Posadas en la base de datos
+const POSADAS_ID = '6980fc4e8ee0f58808cdefbe';
 
 const DESCRIPTIONS = [
     'Perro mediano, muy amigable. Se perdió cerca del parque. Tiene collar azul.',
@@ -148,14 +144,15 @@ async function seedDatabase() {
         const imagePath = path.join(TEST_IMAGES_DIR, imageFile);
 
         // Seleccionar datos aleatorios
-        const city = CITIES[i % CITIES.length];
+        // Datos para Posadas
+        const city = POSADAS_ID;
         const description = DESCRIPTIONS[i % DESCRIPTIONS.length];
         const phone = PHONES[i % PHONES.length];
         const type = Math.random() > 0.5 ? 'LOST' : 'FIND';
-        const coords = addCoordinateVariation(COORDINATES[city] || COORDINATES['Buenos Aires']);
+        const coords = addCoordinateVariation(COORDINATES['Posadas']);
 
         console.log(`[${i + 1}/${imageFiles.length}] Procesando: ${imageFile}`);
-        console.log(`   📍 ${city} | ${type === 'LOST' ? '🔴 Perdido' : '🟢 Encontrado'}`);
+        console.log(`   📍 Posadas (ID: ${city}) | ${type === 'LOST' ? '🔴 Perdido' : '🟢 Encontrado'}`);
 
         try {
             // Convertir imagen a base64

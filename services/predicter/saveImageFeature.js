@@ -6,7 +6,7 @@ exports.saveImageFeature = async (filename) => {
       filename: filename
     }, {
       headers: {
-        'API_KEY': process.env.MACHINE_LEARNING_API_KEY
+        'X-API-KEY': process.env.MACHINE_LEARNING_API_KEY
       }
     });
     return response.data;

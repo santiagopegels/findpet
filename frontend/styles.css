@@ -171,7 +171,7 @@ body::before {
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all var(--transition-normal);
+    transition: background var(--transition-normal), border-color var(--transition-normal), box-shadow var(--transition-normal);
 }
 
 .btn-filter:hover {
@@ -236,8 +236,9 @@ body::before {
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-subtle);
     overflow: hidden;
-    transition: all var(--transition-normal);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal);
     cursor: pointer;
+    contain: content;
 }
 
 .pet-card:hover {
@@ -249,8 +250,9 @@ body::before {
 .pet-card-image {
     position: relative;
     width: 100%;
-    aspect-ratio: 4/3;
+    aspect-ratio: 3/4;
     overflow: hidden;
+    background: var(--bg-secondary);
 }
 
 .pet-card-image img {
@@ -407,7 +409,8 @@ body::before {
     content: '';
     display: block;
     width: 100%;
-    aspect-ratio: 4/3;
+    aspect-ratio: 3/4;
+    /* Formato vertical */
     background: linear-gradient(90deg, var(--bg-secondary) 0%, var(--bg-glass) 50%, var(--bg-secondary) 100%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
@@ -475,6 +478,7 @@ body::before {
     opacity: 0;
     transition: opacity var(--transition-normal);
     backdrop-filter: blur(4px);
+    will-change: opacity;
 }
 
 .sidebar.open .sidebar-overlay {
@@ -495,6 +499,8 @@ body::before {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    will-change: transform;
+    contain: layout style;
 }
 
 .sidebar.open .sidebar-content {
@@ -638,7 +644,8 @@ textarea::placeholder {
 .upload-area {
     position: relative;
     width: 100%;
-    aspect-ratio: 4/3;
+    aspect-ratio: 3/4;
+    /* Formato vertical para fotos de mascotas */
     background: var(--bg-secondary);
     border: 2px dashed var(--border-subtle);
     border-radius: var(--radius-lg);
@@ -686,6 +693,8 @@ textarea::placeholder {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* Cover para llenar el área de preview */
+    background: var(--bg-secondary);
 }
 
 .btn-remove-image {
@@ -778,7 +787,7 @@ textarea::placeholder {
     padding: var(--space-md) var(--space-lg);
 }
 
-.btn-full + .btn-full {
+.btn-full+.btn-full {
     margin-top: var(--space-sm);
 }
 
@@ -869,6 +878,7 @@ textarea::placeholder {
         opacity: 0;
         transform: translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -880,6 +890,7 @@ textarea::placeholder {
         opacity: 0;
         transform: translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -891,6 +902,7 @@ textarea::placeholder {
         opacity: 0;
         transform: translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -904,9 +916,12 @@ textarea::placeholder {
 }
 
 @keyframes bounce {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: translateY(0);
     }
+
     50% {
         transform: translateY(-8px);
     }
@@ -916,6 +931,7 @@ textarea::placeholder {
     0% {
         background-position: -200% 0;
     }
+
     100% {
         background-position: 200% 0;
     }
@@ -925,6 +941,7 @@ textarea::placeholder {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -981,4 +998,140 @@ textarea::placeholder {
     .loading-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ====================================
+   Centered Modal
+   ==================================== */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-normal);
+}
+
+.modal-overlay:not(.hidden) {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.95) translateY(10px);
+    transition: transform var(--transition-normal);
+    overflow: hidden;
+}
+
+.modal-overlay:not(.hidden) .modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-secondary);
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: var(--space-lg);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+}
+
+@media (max-width: 640px) {
+    .modal-content {
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.location-status {
+    font-size: 0.85rem;
+    margin-top: var(--space-xs);
+    color: var(--accent-success);
+}
+
+/* ====================================
+   Map Styles
+   ==================================== */
+
+.map-container {
+    width: 100%;
+    height: 300px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 2px solid var(--border-subtle);
+    margin-bottom: var(--space-sm);
+    background: var(--bg-secondary);
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+.location-coords {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.location-coords span {
+    font-family: 'Courier New', monospace;
+    color: var(--accent-primary);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: var(--space-xs) 0;
+    font-style: italic;
+}
+
+/* Leaflet custom marker */
+.leaflet-marker-icon.custom-marker {
+    background-color: var(--accent-primary);
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }

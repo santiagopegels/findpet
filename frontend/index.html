@@ -9,7 +9,19 @@
         content="Aplicación para encontrar mascotas perdidas usando reconocimiento de imágenes con IA">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="style"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
+        media="all">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            rel="stylesheet">
+    </noscript>
+
+    <!-- Leaflet CSS para mapas -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -22,6 +34,14 @@
                     <span class="logo-icon">🐕</span>
                     <h1>Findog</h1>
                 </div>
+                <button class="btn btn-primary" id="openNewSearchBtn" style="margin-right: 1rem; border-radius: 2rem;">
+                    <svg style="width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>Nueva Búsqueda</span>
+                </button>
                 <button class="btn-filter" id="filterToggleBtn">
                     <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
@@ -80,48 +100,6 @@
                 </div>
 
                 <div class="sidebar-body">
-                    <!-- Filtros Básicos -->
-                    <section class="filter-section">
-                        <h3 class="filter-title">Búsqueda por Filtros</h3>
-
-                        <div class="form-group">
-                            <label for="filterCity">Ciudad</label>
-                            <input type="text" id="filterCity" placeholder="Ej: Buenos Aires">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="filterType">Tipo</label>
-                            <select id="filterType">
-                                <option value="">Todos</option>
-                                <option value="LOST">Perdidos</option>
-                                <option value="FIND">Encontrados</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="filterDateFrom">Desde</label>
-                            <input type="date" id="filterDateFrom">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="filterDateTo">Hasta</label>
-                            <input type="date" id="filterDateTo">
-                        </div>
-
-                        <button class="btn btn-primary btn-full" id="applyFiltersBtn">
-                            <span>🔍</span> Aplicar Filtros
-                        </button>
-
-                        <button class="btn btn-secondary btn-full" id="clearFiltersBtn">
-                            <span>🔄</span> Limpiar Filtros
-                        </button>
-                    </section>
-
-                    <!-- Separador -->
-                    <div class="filter-divider">
-                        <span>o</span>
-                    </div>
-
                     <!-- Reverse Search -->
                     <section class="filter-section">
                         <h3 class="filter-title">Buscar con Foto</h3>
@@ -129,8 +107,17 @@
                             usando IA.</p>
 
                         <div class="form-group">
+                            <label for="reverseSearchProvince">Provincia *</label>
+                            <select id="reverseSearchProvince" required>
+                                <option value="">Cargando provincias...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
                             <label for="reverseSearchCity">Ciudad *</label>
-                            <input type="text" id="reverseSearchCity" placeholder="Ej: Buenos Aires" required>
+                            <select id="reverseSearchCity" required disabled>
+                                <option value="">Selecciona primero una provincia</option>
+                            </select>
                         </div>
 
                         <div class="upload-area" id="uploadArea">
@@ -163,10 +150,106 @@
 
         <!-- Toast Notifications -->
         <div class="toast-container" id="toastContainer"></div>
+
+        <!-- New Search Modal -->
+        <div class="modal-overlay hidden" id="newSearchModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Nueva Búsqueda</h2>
+                    <button class="btn-close" id="closeNewSearchBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="newSearchForm" class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="newSearchType">Tipo *</label>
+                            <select id="newSearchType" required>
+                                <option value="LOST">Perdido</option>
+                                <option value="FIND">Encontrado</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="newSearchPhone">Teléfono de contacto *</label>
+                            <input type="tel" id="newSearchPhone" placeholder="Ej: 11 1234 5678" required>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="newSearchProvince">Provincia *</label>
+                            <select id="newSearchProvince" required>
+                                <option value="">Cargando provincias...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="newSearchCity">Ciudad *</label>
+                            <select id="newSearchCity" required disabled>
+                                <option value="">Selecciona primero una provincia</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ubicación donde se encontró *</label>
+                        <p class="form-hint">Haz clic en el mapa para marcar la ubicación exacta</p>
+
+
+
+                        <div id="mapContainer" class="map-container">
+                            <div id="map"></div>
+                        </div>
+
+                        <p class="location-coords" id="locationCoords">
+                            <span id="coordsText">Selecciona un punto en el mapa</span>
+                        </p>
+
+                        <input type="hidden" id="newSearchLat" required>
+                        <input type="hidden" id="newSearchLng" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newSearchDescription">Descripción *</label>
+                        <textarea id="newSearchDescription" rows="3"
+                            placeholder="Describe a la mascota, color, raza, características..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Foto de la mascota *</label>
+                        <div class="upload-area" id="newSearchUploadArea">
+                            <input type="file" id="newSearchFileInput" accept="image/*" hidden required>
+                            <div class="upload-placeholder" id="newSearchUploadPlaceholder">
+                                <span class="upload-icon">📷</span>
+                                <p>Haz clic o arrastra una imagen</p>
+                            </div>
+                            <img id="newSearchImagePreview" class="image-preview hidden" alt="Preview">
+                            <button type="button" class="btn-remove-image hidden" id="newSearchRemoveImageBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 6L6 18M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-full" id="submitNewSearchBtn">
+                        <span>💾</span> Publicar Búsqueda
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <script src="image-compressor.js"></script>
-    <script src="app.js"></script>
+    <!-- Leaflet JS para mapas -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script src="image-compressor.js" defer></script>
+    <script src="app.js" defer></script>
 </body>
 
 </html>

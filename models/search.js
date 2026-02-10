@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const searchSchema = new mongoose.Schema({
   city: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Ciudad',
     required: true
   },
   description: {

@@ -14,6 +14,16 @@ const CiudadSchema = Schema({
         type: Schema.Types.ObjectId,
         ref: 'Provincia',
         required: true
+    },
+    centroide: {
+        lat: {
+            type: Number,
+            required: false
+        },
+        lon: {
+            type: Number,
+            required: false
+        }
     }
 });
 

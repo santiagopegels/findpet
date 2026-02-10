@@ -80,7 +80,11 @@ const SEED_PROVINCIAS = async () => {
                     {
                         nombre: loc.nombre,
                         id: loc.id,
-                        provincia: mongoProvId
+                        provincia: mongoProvId,
+                        centroide: loc.centroide ? {
+                            lat: loc.centroide.lat,
+                            lon: loc.centroide.lon
+                        } : undefined
                     },
                     { upsert: true, new: true }
                 );

@@ -7,7 +7,7 @@ exports.searchSimilarImages = async (image, searchesIds) => {
       'ids': searchesIds
     }, {
       headers: {
-        'API_KEY': process.env.MACHINE_LEARNING_API_KEY
+        'X-API-KEY': process.env.MACHINE_LEARNING_API_KEY
       }
     });
     return response.data.data;

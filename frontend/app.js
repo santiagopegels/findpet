@@ -30,52 +30,25 @@ const state = {
         city: '',
         image: null
     },
+    newSearch: {
+        image: null,
+        location: null
+    },
     isLoading: false,
     isSidebarOpen: false
 };
 
-// DOM Elements
-const elements = {
-    // Header
-    filterToggleBtn: document.getElementById('filterToggleBtn'),
-
-    // Stats
-    statsBar: document.getElementById('statsBar'),
-    statsText: document.getElementById('statsText'),
-
-    // Grid
-    petsGrid: document.getElementById('petsGrid'),
-    pagination: document.getElementById('pagination'),
-    loadingGrid: document.getElementById('loadingGrid'),
-    emptyState: document.getElementById('emptyState'),
-
-    // Sidebar
-    filterSidebar: document.getElementById('filterSidebar'),
-    sidebarOverlay: document.getElementById('sidebarOverlay'),
-    closeSidebarBtn: document.getElementById('closeSidebarBtn'),
-
-    // Filters
-    filterCity: document.getElementById('filterCity'),
-    filterType: document.getElementById('filterType'),
-    filterDateFrom: document.getElementById('filterDateFrom'),
-    filterDateTo: document.getElementById('filterDateTo'),
-    applyFiltersBtn: document.getElementById('applyFiltersBtn'),
-    clearFiltersBtn: document.getElementById('clearFiltersBtn'),
-
-    // Reverse Search
-    reverseSearchCity: document.getElementById('reverseSearchCity'),
-    uploadArea: document.getElementById('uploadArea'),
-    fileInput: document.getElementById('fileInput'),
-    uploadPlaceholder: document.getElementById('uploadPlaceholder'),
-    imagePreview: document.getElementById('imagePreview'),
-    removeImageBtn: document.getElementById('removeImageBtn'),
-    reverseSearchBtn: document.getElementById('reverseSearchBtn'),
-
-    // Loading & Toast
-    loadingOverlay: document.getElementById('loadingOverlay'),
-    loadingText: document.getElementById('loadingText'),
-    toastContainer: document.getElementById('toastContainer')
-};
+// DOM Elements - Lazy loading para evitar bloquear el hilo principal
+// Los elementos se cachean después de la primera obtención
+const _elementsCache = {};
+const elements = new Proxy({}, {
+    get(target, prop) {
+        if (!_elementsCache[prop]) {
+            _elementsCache[prop] = document.getElementById(prop);
+        }
+        return _elementsCache[prop];
+    }
+});
 
 // ====================================
 // Utility Functions
@@ -156,38 +129,7 @@ document.addEventListener('keydown', (e) => {
 // Filter Functions
 // ====================================
 
-function applyFilters() {
-    state.filters.city = elements.filterCity.value.trim();
-    state.filters.type = elements.filterType.value;
-    state.filters.dateFrom = elements.filterDateFrom.value;
-    state.filters.dateTo = elements.filterDateTo.value;
-    state.pagination.page = 1;
 
-    closeSidebar();
-    fetchPets();
-}
-
-function clearFilters() {
-    elements.filterCity.value = '';
-    elements.filterType.value = '';
-    elements.filterDateFrom.value = '';
-    elements.filterDateTo.value = '';
-
-    state.filters = {
-        city: '',
-        type: '',
-        dateFrom: '',
-        dateTo: ''
-    };
-    state.pagination.page = 1;
-
-    closeSidebar();
-    fetchPets();
-}
-
-// Event Listeners for Filters
-elements.applyFiltersBtn.addEventListener('click', applyFilters);
-elements.clearFiltersBtn.addEventListener('click', clearFilters);
 
 // ====================================
 // Image Upload Functions
@@ -223,10 +165,10 @@ async function handleFileSelect(file) {
         updateReverseSearchButton();
 
         hideLoading();
-        showToast('Imagen comprimida y lista para subir', 'success');
+        showToast('✅ Imagen comprimida y lista para subir', 'success');
 
     } catch (error) {
-        console.error('Error comprimiendo imagen:', error);
+        console.error('Error procesando imagen:', error);
         showToast('Error al procesar la imagen: ' + error.message, 'error');
         hideLoading();
     }
@@ -265,7 +207,7 @@ elements.removeImageBtn.addEventListener('click', (e) => {
     removeImage();
 });
 
-elements.reverseSearchCity.addEventListener('input', updateReverseSearchButton);
+elements.reverseSearchCity.addEventListener('change', updateReverseSearchButton);
 
 // Drag and Drop
 elements.uploadArea.addEventListener('dragover', (e) => {
@@ -407,14 +349,14 @@ function renderPets() {
     elements.petsGrid.innerHTML = '';
 
     state.pets.forEach((pet, index) => {
-        const card = createPetCard(pet);
+        const card = createPetCard(pet, index);
         card.style.animationDelay = `${index * 50}ms`;
         card.classList.add('fade-in');
         elements.petsGrid.appendChild(card);
     });
 }
 
-function createPetCard(pet) {
+function createPetCard(pet, index = 0) {
     const card = document.createElement('article');
     card.className = 'pet-card';
 
@@ -426,14 +368,21 @@ function createPetCard(pet) {
     const mediumUrl = pet.imageUrls?.medium || pet.imageUrl || pet.image || '/images/placeholder.png';
     const largeUrl = pet.imageUrls?.large || pet.imageUrl || pet.image || '/images/placeholder.png';
 
+    // LCP Optimization: Primeras 6 imágenes (viewport inicial) sin lazy loading + high priority
+    // Resto con lazy loading para mejor performance
+    const isAboveFold = index < 6;
+    const loadingAttr = isAboveFold ? '' : 'loading="lazy"';
+    const fetchPriorityAttr = isAboveFold ? 'fetchpriority="high"' : '';
+
     card.innerHTML = `
         <div class="pet-card-image">
             <img 
                 src="${thumbnailUrl}" 
                 data-medium="${mediumUrl}"
                 data-large="${largeUrl}"
-                alt="Imagen de mascota" 
-                loading="lazy" 
+                alt="Imagen de mascota ${pet.type === 'LOST' ? 'perdida' : 'encontrada'} en ${pet.city}" 
+                ${loadingAttr}
+                ${fetchPriorityAttr}
                 class="pet-image"
                 srcset="${thumbnailUrl} 300w, ${mediumUrl} 800w, ${largeUrl} 1200w"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -595,6 +544,429 @@ async function checkApiHealth() {
 }
 
 // ====================================
+// New Search Functions
+// ====================================
+
+function openNewSearchModal() {
+    elements.newSearchModal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    // Inicializar mapa después de que el modal esté visible
+    setTimeout(() => {
+        initMap();
+    }, 100);
+}
+
+function closeNewSearchModal() {
+    elements.newSearchModal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+// Image Handling for New Search
+async function handleNewSearchFileSelect(file) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showToast('Por favor selecciona un archivo de imagen', 'error');
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('La imagen no debe superar 5MB', 'error');
+        return;
+    }
+
+    try {
+        showLoading('Comprimiendo imagen...');
+        const compressedDataUrl = await ImageCompressor.compressImage(file);
+
+        state.newSearch.image = compressedDataUrl;
+        elements.newSearchImagePreview.src = compressedDataUrl;
+        elements.newSearchImagePreview.classList.remove('hidden');
+        elements.newSearchUploadPlaceholder.classList.add('hidden');
+        elements.newSearchRemoveImageBtn.classList.remove('hidden');
+        elements.newSearchUploadArea.classList.add('has-image');
+
+        hideLoading();
+        showToast('✅ Imagen comprimida y lista', 'success');
+    } catch (error) {
+        console.error('Error procesando imagen:', error);
+        showToast('Error al procesar la imagen', 'error');
+        hideLoading();
+    }
+}
+
+function removeNewSearchImage() {
+    state.newSearch.image = null;
+    elements.newSearchImagePreview.src = '';
+    elements.newSearchImagePreview.classList.add('hidden');
+    elements.newSearchUploadPlaceholder.classList.remove('hidden');
+    elements.newSearchRemoveImageBtn.classList.add('hidden');
+    elements.newSearchUploadArea.classList.remove('has-image');
+    elements.newSearchFileInput.value = '';
+}
+
+// ====================================
+// Interactive Map for Location Selection
+// ====================================
+
+let map = null;
+let marker = null;
+const DEFAULT_CENTER = [-34.6037, -58.3816]; // Buenos Aires, Argentina
+const DEFAULT_ZOOM = 13;
+
+function initMap() {
+    // Inicializar mapa solo si no existe
+    if (map) return;
+
+    // Crear mapa centrado en Buenos Aires por defecto
+    map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+
+    // Agregar capa de tiles de OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(map);
+
+    // Evento de clic en el mapa
+    map.on('click', function (e) {
+        setMapLocation(e.latlng.lat, e.latlng.lng);
+    });
+
+    console.log('🗺️ Mapa inicializado');
+}
+
+function setMapLocation(lat, lng) {
+    // Remover marcador anterior si existe
+    if (marker) {
+        map.removeLayer(marker);
+    }
+
+    // Crear nuevo marcador
+    marker = L.marker([lat, lng], {
+        draggable: true,
+        icon: L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        })
+    }).addTo(map);
+
+    // Evento cuando se arrastra el marcador
+    marker.on('dragend', function (e) {
+        const position = e.target.getLatLng();
+        updateLocationInputs(position.lat, position.lng);
+    });
+
+    // Actualizar inputs
+    updateLocationInputs(lat, lng);
+
+    // Centrar mapa en la nueva ubicación
+    map.setView([lat, lng], map.getZoom());
+}
+
+function updateLocationInputs(lat, lng) {
+    elements.newSearchLat.value = lat;
+    elements.newSearchLng.value = lng;
+
+    // Actualizar texto de coordenadas
+    const coordsText = document.getElementById('coordsText');
+    if (coordsText) {
+        coordsText.textContent = `📍 Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+    }
+}
+
+// ====================================
+// GPS Location
+// ====================================
+
+
+// Submit New Search
+async function submitNewSearch(e) {
+    e.preventDefault();
+
+    if (!state.newSearch.image) {
+        showToast('Debes subir una foto de la mascota', 'warning');
+        return;
+    }
+
+    if (!elements.newSearchLat.value || !elements.newSearchLng.value) {
+        showToast('Es necesaria la ubicación GPS', 'warning');
+        // Optional: Auto-trigger GPS?
+        // getGPSLocation();
+        return;
+    }
+
+    const type = elements.newSearchType.value;
+    const phone = elements.newSearchPhone.value;
+    const provinciaId = elements.newSearchProvince.value;
+    const cityInput = elements.newSearchCity.value;
+    const description = elements.newSearchDescription.value;
+
+    // Obtener el nombre de la provincia del select
+    const provinciaSelect = elements.newSearchProvince;
+    const provinciaName = provinciaSelect.options[provinciaSelect.selectedIndex]?.text || '';
+
+    const payload = {
+        type,
+        phone,
+        city: cityInput,
+        description,
+        gpsLocation: {
+            latitude: parseFloat(elements.newSearchLat.value),
+            longitude: parseFloat(elements.newSearchLng.value)
+        },
+        image: state.newSearch.image
+    };
+
+    try {
+        showLoading('Publicando búsqueda...');
+
+        const response = await fetch(API_ENDPOINTS.search, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Error al guardar la búsqueda');
+        }
+
+        showToast('Búsqueda publicada con éxito!', 'success');
+        closeNewSearchModal();
+
+        // Reset form
+        elements.newSearchForm.reset();
+        removeNewSearchImage();
+
+
+        // Reset ciudad select
+        elements.newSearchCity.innerHTML = '<option value="">Selecciona primero una provincia</option>';
+        elements.newSearchCity.disabled = true;
+
+        // Reset mapa y marcador
+        if (marker) {
+            map.removeLayer(marker);
+            marker = null;
+        }
+        if (map) {
+            map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+        }
+        const coordsText = document.getElementById('coordsText');
+        if (coordsText) {
+            coordsText.textContent = 'Selecciona un punto en el mapa';
+        }
+
+        // Refresh grid
+        fetchPets();
+
+    } catch (error) {
+        console.error('Error publishing search:', error);
+        showToast(`Error: ${error.message}`, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Event Listeners for New Search
+if (elements.openNewSearchBtn) {
+    elements.openNewSearchBtn.addEventListener('click', openNewSearchModal);
+}
+
+if (elements.closeNewSearchBtn) {
+    elements.closeNewSearchBtn.addEventListener('click', closeNewSearchModal);
+}
+
+
+
+if (elements.newSearchForm) {
+    elements.newSearchForm.addEventListener('submit', submitNewSearch);
+}
+
+// Image Upload Events (New Search)
+if (elements.newSearchUploadArea) {
+    elements.newSearchUploadArea.addEventListener('click', () => {
+        if (!state.newSearch.image) elements.newSearchFileInput.click();
+    });
+
+    elements.newSearchFileInput.addEventListener('change', (e) => {
+        handleNewSearchFileSelect(e.target.files[0]);
+    });
+
+    elements.newSearchRemoveImageBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeNewSearchImage();
+    });
+
+    elements.newSearchUploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        elements.newSearchUploadArea.classList.add('dragover');
+    });
+
+    elements.newSearchUploadArea.addEventListener('dragleave', () => {
+        elements.newSearchUploadArea.classList.remove('dragover');
+    });
+
+    elements.newSearchUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        elements.newSearchUploadArea.classList.remove('dragover');
+        handleNewSearchFileSelect(e.dataTransfer.files[0]);
+    });
+}
+
+// ====================================
+// Georef - Provincias y Ciudades
+// ====================================
+
+let provinciasData = [];
+let ciudadesCache = {}; // Cache de ciudades por provincia
+
+async function loadProvincias() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/georef/provincias`);
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error('Error al cargar provincias');
+        }
+
+        provinciasData = data.provincias;
+
+        // Poblar selects de provincias
+        const selects = [elements.newSearchProvince, elements.reverseSearchProvince];
+
+        selects.forEach(select => {
+            if (!select) return;
+            select.innerHTML = '<option value="">Selecciona una provincia</option>';
+            provinciasData.forEach(provincia => {
+                const option = document.createElement('option');
+                option.value = provincia._id;
+                option.textContent = provincia.nombre;
+                select.appendChild(option);
+            });
+        });
+
+        console.log(`✅ ${provinciasData.length} provincias cargadas`);
+
+    } catch (error) {
+        console.error('Error cargando provincias:', error);
+        showToast('Error al cargar provincias', 'error');
+        if (elements.newSearchProvince) elements.newSearchProvince.innerHTML = '<option value="">Error al cargar provincias</option>';
+        if (elements.reverseSearchProvince) elements.reverseSearchProvince.innerHTML = '<option value="">Error al cargar provincias</option>';
+    }
+}
+
+async function loadCiudades(provinciaId, targetSelect) {
+    try {
+        // Verificar cache primero
+        if (ciudadesCache[provinciaId]) {
+            populateCiudadesSelect(ciudadesCache[provinciaId], targetSelect);
+            return;
+        }
+
+        // Deshabilitar select mientras carga
+        targetSelect.disabled = true;
+        targetSelect.innerHTML = '<option value="">Cargando ciudades...</option>';
+
+        const response = await fetch(`${API_BASE_URL}/api/georef/provincias/${provinciaId}/ciudades`);
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error('Error al cargar ciudades');
+        }
+
+        // Guardar en cache
+        ciudadesCache[provinciaId] = data.ciudades;
+
+        // Poblar select
+        populateCiudadesSelect(data.ciudades, targetSelect);
+
+        console.log(`✅ ${data.ciudades.length} ciudades cargadas para ${data.provincia.nombre}`);
+
+    } catch (error) {
+        console.error('Error cargando ciudades:', error);
+        showToast('Error al cargar ciudades', 'error');
+        targetSelect.innerHTML = '<option value="">Error al cargar ciudades</option>';
+        targetSelect.disabled = true;
+    }
+}
+
+function populateCiudadesSelect(ciudades, targetSelect) {
+    targetSelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+
+    ciudades.forEach(ciudad => {
+        const option = document.createElement('option');
+        option.value = ciudad._id;
+        option.textContent = ciudad.nombre;
+
+        // Guardar centroide en data attributes si existe
+        if (ciudad.centroide && ciudad.centroide.lat && ciudad.centroide.lon) {
+            option.dataset.lat = ciudad.centroide.lat;
+            option.dataset.lon = ciudad.centroide.lon;
+        }
+
+        targetSelect.appendChild(option);
+    });
+
+    targetSelect.disabled = false;
+}
+
+if (elements.newSearchProvince) {
+    elements.newSearchProvince.addEventListener('change', (e) => {
+        const provinciaId = e.target.value;
+        if (provinciaId) {
+            loadCiudades(provinciaId, elements.newSearchCity);
+        } else {
+            elements.newSearchCity.innerHTML = '<option value="">Selecciona primero una provincia</option>';
+            elements.newSearchCity.disabled = true;
+        }
+    });
+}
+
+if (elements.reverseSearchProvince) {
+    elements.reverseSearchProvince.addEventListener('change', (e) => {
+        const provinciaId = e.target.value;
+        if (provinciaId) {
+            loadCiudades(provinciaId, elements.reverseSearchCity);
+        } else {
+            elements.reverseSearchCity.innerHTML = '<option value="">Selecciona primero una provincia</option>';
+            elements.reverseSearchCity.disabled = true;
+        }
+        updateReverseSearchButton();
+    });
+}
+
+// Event listener para cambio de ciudad - centrar mapa en centroide
+if (elements.newSearchCity) {
+    elements.newSearchCity.addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const lat = selectedOption.dataset.lat;
+        const lon = selectedOption.dataset.lon;
+
+        // Si la ciudad tiene centroide, centrar el mapa allí
+        if (lat && lon && map) {
+            const latNum = parseFloat(lat);
+            const lonNum = parseFloat(lon);
+
+            // Centrar mapa en el centroide de la ciudad
+            map.setView([latNum, lonNum], 14);
+
+            // Colocar un marcador en el centroide
+            setMapLocation(latNum, lonNum);
+
+            showToast('📍 Mapa centrado en ' + selectedOption.text, 'success');
+        }
+    });
+}
+
+// ====================================
 // Initialization
 // ====================================
 
@@ -602,4 +974,5 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🐕 Findog App initialized');
     checkApiHealth();
     fetchPets();
+    loadProvincias(); // Cargar provincias al iniciar
 });

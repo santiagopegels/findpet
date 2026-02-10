@@ -36,7 +36,7 @@ async function migrateExistingImages() {
     try {
         // Conectar a MongoDB
         console.log(`${colors.blue}📡 Conectando a MongoDB...${colors.reset}`);
-        await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/findog');
+        await mongoose.connect(process.env.MONGO_DB_CONNECTION || process.env.MONGO_URI || 'mongodb://mongo:27017/findog');
         console.log(`${colors.green}✅ Conexión establecida${colors.reset}`);
         console.log('');
 

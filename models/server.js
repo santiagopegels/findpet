@@ -60,8 +60,8 @@ class Server {
     this.app.use(cors());
 
     // 6. Body parsing con límites de seguridad
-    this.app.use(express.json({ limit: '6mb' }));
-    this.app.use(express.urlencoded({ extended: true, limit: '6mb' }));
+    this.app.use(express.json({ limit: '20mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
     // 7. Servir archivos estáticos
     this.app.use(express.static('frontend')); // Serve frontend app

@@ -3,7 +3,7 @@ const { createError } = require('../utils/errors');
 
 const validateFields = (req, res, next) => {
     const errors = validationResult(req);
-    
+
     if (!errors.isEmpty()) {
         // Formatear errores para mejor legibilidad
         const formattedErrors = errors.array().map(error => ({
@@ -15,7 +15,7 @@ const validateFields = (req, res, next) => {
 
         // Crear mensaje descriptivo
         const firstError = formattedErrors[0];
-        const message = formattedErrors.length === 1 
+        const message = formattedErrors.length === 1
             ? `Error en ${firstError.field}: ${firstError.message}`
             : `Se encontraron ${formattedErrors.length} errores de validación`;
 
@@ -53,15 +53,11 @@ const sanitizeInput = (req, res, next) => {
         Object.keys(req.body).forEach(key => {
             if (typeof req.body[key] === 'string') {
                 req.body[key] = req.body[key].trim();
-                
+
                 // Normalizar campos específicos
                 if (key === 'phone') {
                     // Remover caracteres no numéricos del teléfono (excepto +)
                     req.body[key] = req.body[key].replace(/[^\d+]/g, '');
-                }
-                if (key === 'city') {
-                    // Capitalizar primera letra de la ciudad
-                    req.body[key] = req.body[key].charAt(0).toUpperCase() + req.body[key].slice(1).toLowerCase();
                 }
             }
         });
@@ -76,7 +72,7 @@ const sanitizeInput = (req, res, next) => {
             }
         }
     }
-    
+
     next();
 };
 
