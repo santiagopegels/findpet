@@ -1,6 +1,6 @@
 const { Router } = require('express')
 const { check } = require('express-validator')
-const { createSearch, getAllSearches, reverseSearch } = require('../controllers/search');
+const { createSearch, getAllSearches, reverseSearch, getMapLocations } = require('../controllers/search');
 const { validateFields, sanitizeInput } = require('../middleware/validate-fields');
 const { uploadLimiter, reverseSearchLimiter } = require('../middleware/rate-limiter');
 const { validateImageBase64, validateImageExists } = require('../middleware/image-validator');
@@ -10,6 +10,9 @@ const router = Router();
 
 // GET - Obtener todas las búsquedas con paginación y filtros
 router.get('/', asyncHandler(getAllSearches))
+
+// GET - Obtener solo las ubicaciones para el mapa
+router.get('/map-locations', asyncHandler(getMapLocations))
 
 // POST - Búsqueda por similitud de imagen (reverse search)
 router.post('/reverse-search',

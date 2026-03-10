@@ -62,9 +62,15 @@ const addImagePathToSearches = (searches, baseUrl = null) => {
 const buildSearchFilters = (query) => {
   const filters = {};
 
-  // Filtro por ciudad (case insensitive)
+  // Filtro por ciudad
   if (query.city) {
-    filters.city = new RegExp(query.city.trim(), 'i');
+    const mongoose = require('mongoose');
+    // If city is a valid ObjectId, search by exact match instead of regex
+    if (mongoose.Types.ObjectId.isValid(query.city)) {
+      filters.city = query.city.trim();
+    } else {
+      filters.city = new RegExp(query.city.trim(), 'i');
+    }
   }
 
   // Filtro por tipo

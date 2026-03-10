@@ -192,6 +192,10 @@ const getAllSearches = async (req, res, next) => {
                         .sort(sortParams)
                         .limit(paginationParams.limit)
                         .skip(paginationParams.skip)
+                        .populate({
+                            path: 'city',
+                            populate: { path: 'provincia' }
+                        })
                         .select('-__v') // Excluir campo de versión de Mongoose
                 ]);
 
@@ -360,7 +364,11 @@ const reverseSearch = async (req, res, next) => {
                 Search.find(filters)
                     .sort(sortParams)
                     .limit(paginationParams.limit)
-                    .skip(paginationParams.skip),
+                    .skip(paginationParams.skip)
+                    .populate({
+                        path: 'city',
+                        populate: { path: 'provincia' }
+                    }),
                 Search.countDocuments(filters)
             ]);
         } catch (error) {
@@ -432,8 +440,59 @@ const reverseSearch = async (req, res, next) => {
 
 
 
+const getMapLocations = async (req, res, next) => {
+    const startTime = Date.now();
+    try {
+        const filters = {
+            'gpsLocation.latitude': { $ne: null },
+            'gpsLocation.longitude': { $ne: null }
+        };
+        // Opcional: filtrar por ciudad o tipo si se envían por query params
+        if (req.query.city) filters.city = req.query.city;
+        if (req.query.type) filters.type = req.query.type;
+
+        const cacheKey = CacheUtils.keys.searches({
+            mapLocations: true,
+            city: req.query.city || 'all',
+            type: req.query.type || 'all'
+        });
+
+        const executeSearch = async () => {
+            const searches = await Search.find(filters)
+                .select('type gpsLocation city phone description filename imageVersions')
+                .populate({
+                    path: 'city',
+                    select: 'nombre provincia',
+                    populate: { path: 'provincia', select: 'nombre' }
+                })
+                .lean(); // Faster query without mongoose document overhead
+            
+            return {
+                locations: addImagePathToSearches(searches)
+            };
+        };
+
+        const result = await executeSearchWithCache(
+            cacheKey,
+            executeSearch,
+            CacheUtils.ttl.searches || 300 // Use default if undefined
+        );
+
+        const duration = Date.now() - startTime;
+        
+        return res.status(200).json(formatApiResponse(true, result, 'Ubicaciones obtenidas exitosamente', {
+            processingTime: `${duration}ms`,
+            count: result.locations.length
+        }));
+
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     createSearch,
     getAllSearches,
-    reverseSearch
+    reverseSearch,
+    getMapLocations
 }

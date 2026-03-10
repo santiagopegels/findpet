@@ -8,6 +8,7 @@ const API_BASE_URL = window.location.origin;
 const API_ENDPOINTS = {
     search: `${API_BASE_URL}/api/search`,
     reverseSearch: `${API_BASE_URL}/api/search/reverse-search`,
+    mapLocations: `${API_BASE_URL}/api/search/map-locations`,
     health: `${API_BASE_URL}/api/health`
 };
 
@@ -186,9 +187,8 @@ function removeImage() {
 }
 
 function updateReverseSearchButton() {
-    const hasImage = !!state.reverseSearch.image;
     const hasCity = elements.reverseSearchCity.value.trim().length > 0;
-    elements.reverseSearchBtn.disabled = !hasImage || !hasCity;
+    elements.reverseSearchBtn.disabled = !hasCity;
 }
 
 // Event Listeners for Upload
@@ -225,6 +225,48 @@ elements.uploadArea.addEventListener('drop', (e) => {
     const file = e.dataTransfer.files[0];
     handleFileSelect(file);
 });
+
+// Clear All Filters Function
+function clearAllFilters() {
+    // Reset state
+    state.filters = {
+        city: '',
+        type: '',
+        dateFrom: '',
+        dateTo: ''
+    };
+    state.reverseSearch = {
+        city: '',
+        image: null
+    };
+    state.pagination.page = 1;
+
+    // Reset UI Elements
+    removeImage();
+    elements.reverseSearchProvince.value = '';
+    elements.reverseSearchCity.innerHTML = '<option value="">Selecciona primero una provincia</option>';
+    elements.reverseSearchCity.disabled = true;
+    updateReverseSearchButton();
+
+    // Fetch fresh data
+    fetchPets();
+    showToast('Filtros limpiados', 'success');
+}
+
+// Clear Filters Event Listeners
+if (elements.clearFiltersBtn) {
+    elements.clearFiltersBtn.addEventListener('click', clearAllFilters);
+}
+
+// Limpiar Filtros Link inside Stats Bar
+if (elements.statsText) {
+    elements.statsText.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'clearFiltersLink') {
+            e.preventDefault();
+            clearAllFilters();
+        }
+    });
+}
 
 // ====================================
 // API Functions
@@ -281,7 +323,11 @@ async function performReverseSearch() {
     }
 
     if (!state.reverseSearch.image) {
-        showToast('Por favor sube una imagen', 'warning');
+        // Búsqueda estándar por ciudad si no hay imagen
+        closeSidebar();
+        state.filters.city = city;
+        state.pagination.page = 1;
+        fetchPets();
         return;
     }
 
@@ -374,13 +420,17 @@ function createPetCard(pet, index = 0) {
     const loadingAttr = isAboveFold ? '' : 'loading="lazy"';
     const fetchPriorityAttr = isAboveFold ? 'fetchpriority="high"' : '';
 
+    const locationText = pet.city && pet.city.nombre && pet.city.provincia && pet.city.provincia.nombre 
+        ? `${pet.city.nombre}, ${pet.city.provincia.nombre}` 
+        : (pet.city && pet.city.nombre ? pet.city.nombre : 'Ubicación desconocida');
+
     card.innerHTML = `
         <div class="pet-card-image">
             <img 
                 src="${thumbnailUrl}" 
                 data-medium="${mediumUrl}"
                 data-large="${largeUrl}"
-                alt="Imagen de mascota ${pet.type === 'LOST' ? 'perdida' : 'encontrada'} en ${pet.city}" 
+                alt="Imagen de mascota ${pet.type === 'LOST' ? 'perdida' : 'encontrada'} en ${locationText}" 
                 ${loadingAttr}
                 ${fetchPriorityAttr}
                 class="pet-image"
@@ -392,7 +442,7 @@ function createPetCard(pet, index = 0) {
         <div class="pet-card-content">
             <div class="pet-card-location">
                 <span>📍</span>
-                <span>${pet.city}</span>
+                <span>${locationText}</span>
             </div>
             <p class="pet-card-description">${pet.description}</p>
             <div class="pet-card-footer">
@@ -517,7 +567,7 @@ function updateStats(hasAIResults = false, processingTime = null) {
     // Check active filters
     const activeFilters = Object.values(state.filters).filter(v => v).length;
     if (activeFilters > 0) {
-        text += ` • <span style="color: var(--accent-secondary);">${activeFilters} filtro(s) activo(s)</span>`;
+        text += ` • <span style="color: var(--accent-secondary);">${activeFilters} filtro(s) activo(s)</span> - <a href="#" id="clearFiltersLink" style="color: var(--error); text-decoration: underline; cursor: pointer; font-weight: 500;">Limpiar Filtros</a>`;
     }
 
     elements.statsText.innerHTML = text;
@@ -819,6 +869,120 @@ if (elements.newSearchUploadArea) {
         elements.newSearchUploadArea.classList.remove('dragover');
         handleNewSearchFileSelect(e.dataTransfer.files[0]);
     });
+}
+
+// ====================================
+// Global Map Logic
+// ====================================
+
+let globalMap = null;
+let globalMapMarkers = [];
+
+function openMapModal() {
+    elements.mapModal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    // Initialize map if needed
+    if (!globalMap) {
+        setTimeout(() => {
+            globalMap = L.map('globalMap').setView([-34.6037, -58.3816], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(globalMap);
+            loadMapLocations();
+        }, 100);
+    } else {
+        setTimeout(() => {
+            globalMap.invalidateSize();
+            loadMapLocations();
+        }, 100);
+    }
+}
+
+function closeMapModal() {
+    elements.mapModal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function loadMapLocations() {
+    const loadingOverlay = document.getElementById('mapLoadingOverlay');
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+
+    try {
+        const response = await fetch(API_ENDPOINTS.mapLocations);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Error al cargar ubicaciones');
+        }
+
+        const locations = data.locations || [];
+
+        // Clear existing markers
+        globalMapMarkers.forEach(m => globalMap.removeLayer(m));
+        globalMapMarkers = [];
+
+        // Add pins
+        locations.forEach(pet => {
+            if (pet.gpsLocation && pet.gpsLocation.latitude != null && pet.gpsLocation.longitude != null) {
+                const typeLabel = pet.type === 'LOST' ? 'Perdido' : 'Encontrado';
+                const markerColor = pet.type === 'LOST' ? 'red' : 'green';
+
+                const markerIcon = L.icon({
+                    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${markerColor}.png`,
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                });
+
+                const m = L.marker([pet.gpsLocation.latitude, pet.gpsLocation.longitude], { icon: markerIcon }).addTo(globalMap);
+                
+                const locationText = pet.city && pet.city.nombre && pet.city.provincia && pet.city.provincia.nombre 
+                    ? `${pet.city.nombre}, ${pet.city.provincia.nombre}` 
+                    : (pet.city && pet.city.nombre ? pet.city.nombre : 'Desconocida');
+
+                // Add popup
+                const imgTag = pet.imageUrl || pet.imageUrls?.thumbnail ? `<img src="${pet.imageUrl || pet.imageUrls?.thumbnail}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="Mascota">` : '';
+                const phoneTag = pet.phone ? `<div style="font-size: 13px; color: #666; margin-bottom: 4px;">📞 <a href="tel:${pet.phone}">${pet.phone}</a></div>` : '';
+
+                m.bindPopup(`
+                    <div style="text-align: center; min-width: 150px;">
+                        ${imgTag}
+                        <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; background: ${pet.type === 'LOST' ? '#ffebee' : '#e8f5e9'}; color: ${pet.type === 'LOST' ? '#ef5350' : '#4caf50'}; margin-bottom: 8px;">${typeLabel}</span>
+                        <div style="font-weight: bold; margin-bottom: 4px;">📍 ${locationText}</div>
+                        ${phoneTag}
+                        <p style="font-size: 12px; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${pet.description || ''}</p>
+                    </div>
+                `, { minWidth: 200 });
+
+                globalMapMarkers.push(m);
+            }
+        });
+
+        // Fit bounds if we have markers
+        if (globalMapMarkers.length > 0) {
+            const group = new L.featureGroup(globalMapMarkers);
+            globalMap.fitBounds(group.getBounds().pad(0.1));
+        }
+
+    } catch (error) {
+        console.error('Error fetching map locations:', error);
+        showToast(`Error: ${error.message}`, 'error');
+    } finally {
+        if (loadingOverlay) loadingOverlay.classList.add('hidden');
+    }
+}
+
+// Global Map Event Listeners
+if (elements.openMapBtn) {
+    elements.openMapBtn.addEventListener('click', openMapModal);
+}
+
+if (elements.closeMapBtn) {
+    elements.closeMapBtn.addEventListener('click', closeMapModal);
 }
 
 // ====================================
