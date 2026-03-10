@@ -256,9 +256,11 @@ class ReverseSearchServer:
                 filename = self.image_validator.sanitize_filename(data['filename'])
                 
                 # Verificar que la imagen existe
-                image_path = Config.IMAGES_DIR / f"{filename}.png"
+                # El app guarda versiones: _thumb.webp, _medium.webp, _large.webp
+                # Usamos _large.webp para mejor extracción de características
+                image_path = Config.IMAGES_DIR / f"{filename}_large.webp"
                 if not image_path.exists():
-                    abort(400, description=f"Imagen no encontrada: {filename}.png")
+                    abort(400, description=f"Imagen no encontrada: {filename}_large.webp")
                 
                 # Extraer características
                 feature_vector = self.feature_extractor.extract(str(image_path))
@@ -320,10 +322,16 @@ class ReverseSearchServer:
                 )
                 
                 # Filtrar resultados por IDs solicitados
-                filtered_results = [
-                    img_id for img_id, score in similar_images
+                filtered_results_with_scores = [
+                    (img_id, score) for img_id, score in similar_images
                     if img_id in valid_ids
                 ]
+                
+                logger.info("Ranking de imágenes obtenidas (de más similar a menos similar):")
+                for rank, (img_id, score) in enumerate(filtered_results_with_scores, 1):
+                    logger.info(f" #{rank}: ID {img_id} - Distancia: {score:.4f}")
+                
+                filtered_results = [img_id for img_id, score in filtered_results_with_scores]
                 
                 self.stats['searches_performed'] += 1
                 

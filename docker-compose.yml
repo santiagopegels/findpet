@@ -80,7 +80,7 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:
       # Persistir imágenes y características
-      - ./reverse-searcher/images:/app/images
+      - ./images:/app/images
       - ./reverse-searcher/features:/app/features
       - ./reverse-searcher/models:/app/models
       - ./reverse-searcher/logs:/app/logs

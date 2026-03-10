@@ -320,6 +320,8 @@ const reverseSearch = async (req, res, next) => {
                     if (similarImageIds && similarImageIds.length > 0) {
                         filters._id = { $in: similarImageIds };
                         searchMethod = 'ai_similarity';
+                        // Store the similarity-ordered IDs so we can re-sort after DB fetch
+                        req._similarityOrderedIds = similarImageIds.map(id => id.toString());
 
                         logAppEvent('ML_SIMILARITY_SEARCH_SUCCESS', {
                             city,
@@ -363,6 +365,20 @@ const reverseSearch = async (req, res, next) => {
             ]);
         } catch (error) {
             throw createError.database('Error al ejecutar búsqueda', 'find', error);
+        }
+
+        // When results come from image similarity search, re-order them to match
+        // the similarity ranking returned by the ML service (most similar first).
+        // MongoDB's $in operator does not preserve the order of the IDs array.
+        if (searchMethod === 'ai_similarity' && req._similarityOrderedIds && req._similarityOrderedIds.length > 0) {
+            const idOrderMap = new Map(
+                req._similarityOrderedIds.map((id, index) => [id, index])
+            );
+            searches = searches.sort((a, b) => {
+                const aIdx = idOrderMap.get(a._id.toString()) ?? Infinity;
+                const bIdx = idOrderMap.get(b._id.toString()) ?? Infinity;
+                return aIdx - bIdx;
+            });
         }
 
         const searchesWithImagePath = addImagePathToSearches(searches);

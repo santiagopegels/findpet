@@ -44,11 +44,30 @@ class VectorStore:
                 # Intentar cargar índice existente
                 if Config.FAISS_INDEX_PATH.exists() and Config.METADATA_PATH.exists():
                     self._load_index()
-                    logger.info(f"Índice FAISS cargado: {self.index.ntotal} vectores")
+
+                    # Verificar que la dimensión del índice coincide con la configuración actual.
+                    # Si cambia el modelo (ej. de dim 1280 a 512), el índice guardado queda
+                    # incompatible y FAISS lanza AssertionError al intentar agregar vectores.
+                    if self.index.d != Config.FEATURE_DIMENSION:
+                        logger.warning(
+                            f"Dimensión del índice en disco ({self.index.d}) no coincide con "
+                            f"la configuración actual ({Config.FEATURE_DIMENSION}). "
+                            f"Recreando índice vacío."
+                        )
+                        # Eliminar archivos incompatibles y crear uno nuevo
+                        try:
+                            Config.FAISS_INDEX_PATH.unlink(missing_ok=True)
+                            Config.METADATA_PATH.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                        self._create_new_index()
+                        logger.info(f"Nuevo índice FAISS L2 creado con dimensión {Config.FEATURE_DIMENSION}")
+                    else:
+                        logger.info(f"Índice FAISS cargado: {self.index.ntotal} vectores (dim={self.index.d})")
                 else:
                     # Crear nuevo índice
                     self._create_new_index()
-                    logger.info("Nuevo índice FAISS L2 creado")
+                    logger.info(f"Nuevo índice FAISS L2 creado con dimensión {Config.FEATURE_DIMENSION}")
             except Exception as e:
                 logger.error(f"Error inicializando índice: {e}")
                 self._create_new_index()
@@ -134,9 +153,8 @@ class VectorStore:
                     except:
                         pass
                 
-                # Guardar cambios cada 10 adiciones
-                if self.index.ntotal % 10 == 0:
-                    self._save_index()
+                # Persistir inmediatamente para no perder datos si el servidor reinicia
+                self._save_index()
                 
                 logger.debug(f"Feature añadido: {feature_id} -> índice {current_id}")
                 return current_id

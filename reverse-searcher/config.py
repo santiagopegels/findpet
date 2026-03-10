@@ -24,7 +24,7 @@ class Config:
     YOLO_CONFIDENCE_THRESHOLD = float(os.getenv('YOLO_CONFIDENCE_THRESHOLD', 0.25))
     
     # Storage Configuration
-    IMAGES_DIR = Path('./images')
+    IMAGES_DIR = Path(os.getenv('IMAGES_DIR', './images'))
     FEATURES_DIR = Path('./features')
     FAISS_INDEX_PATH = Path('./features/faiss_index.bin')
     METADATA_PATH = Path('./features/metadata.json')

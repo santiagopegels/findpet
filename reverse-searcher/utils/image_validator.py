@@ -22,6 +22,11 @@ class ImageValidator:
             (is_valid, error_message, image_bytes)
         """
         try:
+            # Stripear prefijo data URL si existe (ej: "data:image/webp;base64,...")
+            # El frontend envía data URLs completas, no solo el base64 puro
+            if ',' in base64_data:
+                base64_data = base64_data.split(',', 1)[1]
+            
             # Decodificar base64
             image_bytes = base64.b64decode(base64_data)
             

@@ -227,47 +227,61 @@ const findNearbySearches = async (SearchModel, latitude, longitude, radiusKm = 5
 
 /**
  * Detectar posibles duplicados por teléfono y coordenadas
+ *
+ * MongoDB no permite $near dentro de $or, por lo que se ejecutan
+ * dos queries separadas y se combinan los resultados.
  */
 const findPossibleDuplicates = async (SearchModel, searchData) => {
-  const filters = [];
+  try {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const baseFilter = { createdAt: { $gte: yesterday }, type: searchData.type };
+    const seenIds = new Set();
+    const duplicates = [];
 
-  // Buscar por mismo teléfono
-  if (searchData.phone) {
-    filters.push({ phone: searchData.phone });
-  }
+    // Query 1: buscar por mismo teléfono
+    if (searchData.phone) {
+      const byPhone = await SearchModel.find({
+        ...baseFilter,
+        phone: searchData.phone
+      }).limit(5);
 
-  // Buscar por coordenadas muy cercanas (menos de 100m)
-  if (searchData.gpsLocation) {
-    const { latitude, longitude } = searchData.gpsLocation;
-
-    filters.push({
-      gpsLocation: {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [longitude, latitude]
-          },
-          $maxDistance: 100 // 100 metros
+      for (const doc of byPhone) {
+        const id = doc._id.toString();
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          duplicates.push(doc);
         }
       }
-    });
-  }
+    }
 
-  if (filters.length === 0) {
-    return [];
-  }
+    // Query 2: buscar por coordenadas muy cercanas (menos de 100m)
+    // $near NO puede estar dentro de $or, por eso se ejecuta por separado
+    if (searchData.gpsLocation) {
+      const { latitude, longitude } = searchData.gpsLocation;
 
-  try {
-    // Buscar en las últimas 24 horas
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const byLocation = await SearchModel.find({
+        ...baseFilter,
+        gpsLocation: {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [longitude, latitude]
+            },
+            $maxDistance: 100 // 100 metros
+          }
+        }
+      }).limit(5);
 
-    const duplicates = await SearchModel.find({
-      $or: filters,
-      createdAt: { $gte: yesterday },
-      type: searchData.type
-    }).limit(5);
+      for (const doc of byLocation) {
+        const id = doc._id.toString();
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          duplicates.push(doc);
+        }
+      }
+    }
 
-    return duplicates;
+    return duplicates.slice(0, 5);
 
   } catch (error) {
     logger.error('Error finding duplicates', {

@@ -11,20 +11,25 @@ services:
     # En desarrollo, montar código fuente para hot reload
     volumes:
       - ./reverse-searcher:/app
-      - ./reverse-searcher/images:/app/images
+      # IMPORTANTE: montar ./images en /shared/images (fuera de /app) para evitar
+      # que el mount de código fuente ./reverse-searcher:/app lo tape.
+      # La variable IMAGES_DIR le dice al servidor Python dónde buscar.
+      - ./images:/shared/images
       - ./reverse-searcher/features:/app/features
       - ./reverse-searcher/models:/app/models
       - ./reverse-searcher/logs:/app/logs
-    
+
     # Variables de entorno para desarrollo
     environment:
       DEBUG: "true"
       LOG_LEVEL: "DEBUG"
       LOG_FORMAT: "text"
-      
+      # Directorio compartido de imágenes con findog-app
+      IMAGES_DIR: /shared/images
+
     # Comando de desarrollo con auto-reload
     command: python start.py --debug --skip-checks
-    
+
     # Puertos adicionales para debugging
     ports:
       - "5000:5000"
