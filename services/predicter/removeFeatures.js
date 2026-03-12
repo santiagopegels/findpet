@@ -12,6 +12,7 @@ exports.removeFeatures = async (ids) => {
     });
     return response.data;
   } catch (error) {
-    console.error(error);
+    console.error('Error in removeFeatures:', error.message);
+    throw error;
   }
 };
