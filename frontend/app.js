@@ -157,6 +157,28 @@ async function handleFileSelect(file) {
         // Comprimir la imagen antes de mostrarla
         const compressedDataUrl = await ImageCompressor.compressImage(file);
 
+        showLoading('Buscando animal en la foto...');
+        const tempImg = new Image();
+        await new Promise((resolve, reject) => {
+            tempImg.onload = () => {
+                tempImg.width = tempImg.naturalWidth;
+                tempImg.height = tempImg.naturalHeight;
+                resolve();
+            };
+            tempImg.onerror = reject;
+            tempImg.src = compressedDataUrl;
+        });
+
+        const hasAnimal = await AnimalDetector.containsAnimal(tempImg);
+
+        if (!hasAnimal) {
+            hideLoading();
+            showToast('⚠️ No se detectó ningún animal válido en la imagen. Intenta con otra foto.', 'error');
+            // Reset input file value
+            if (elements.fileInput) elements.fileInput.value = '';
+            return;
+        }
+
         state.reverseSearch.image = compressedDataUrl;
         elements.imagePreview.src = compressedDataUrl;
         elements.imagePreview.classList.remove('hidden');
@@ -166,7 +188,7 @@ async function handleFileSelect(file) {
         updateReverseSearchButton();
 
         hideLoading();
-        showToast('✅ Imagen comprimida y lista para subir', 'success');
+        showToast('✅ Imagen válida y lista para subir', 'success');
 
     } catch (error) {
         console.error('Error procesando imagen:', error);
@@ -420,8 +442,8 @@ function createPetCard(pet, index = 0) {
     const loadingAttr = isAboveFold ? '' : 'loading="lazy"';
     const fetchPriorityAttr = isAboveFold ? 'fetchpriority="high"' : '';
 
-    const locationText = pet.city && pet.city.nombre && pet.city.provincia && pet.city.provincia.nombre 
-        ? `${pet.city.nombre}, ${pet.city.provincia.nombre}` 
+    const locationText = pet.city && pet.city.nombre && pet.city.provincia && pet.city.provincia.nombre
+        ? `${pet.city.nombre}, ${pet.city.provincia.nombre}`
         : (pet.city && pet.city.nombre ? pet.city.nombre : 'Ubicación desconocida');
 
     card.innerHTML = `
@@ -456,7 +478,7 @@ function createPetCard(pet, index = 0) {
     const img = card.querySelector('.pet-image');
     if (img) {
         img.addEventListener('error', function () {
-            this.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect fill="#12121a" width="200" height="150"/><text fill="#64748b" x="100" y="75" text-anchor="middle" font-family="sans-serif">Sin imagen</text></svg>');
+            this.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect fill="#F3F4F6" width="200" height="150"/><text fill="#6b7280" x="100" y="75" text-anchor="middle" font-family="sans-serif">Sin imagen</text></svg>');
         });
     }
 
@@ -630,6 +652,28 @@ async function handleNewSearchFileSelect(file) {
         showLoading('Comprimiendo imagen...');
         const compressedDataUrl = await ImageCompressor.compressImage(file);
 
+        showLoading('Buscando animal en la foto...');
+        const tempImg = new Image();
+        await new Promise((resolve, reject) => {
+            tempImg.onload = () => {
+                tempImg.width = tempImg.naturalWidth;
+                tempImg.height = tempImg.naturalHeight;
+                resolve();
+            };
+            tempImg.onerror = reject;
+            tempImg.src = compressedDataUrl;
+        });
+
+        const hasAnimal = await AnimalDetector.containsAnimal(tempImg);
+
+        if (!hasAnimal) {
+            hideLoading();
+            showToast('⚠️ No se detectó ningún animal válido en la imagen. Intenta con otra foto.', 'error');
+            // Reset input file value
+            if (elements.newSearchFileInput) elements.newSearchFileInput.value = '';
+            return;
+        }
+
         state.newSearch.image = compressedDataUrl;
         elements.newSearchImagePreview.src = compressedDataUrl;
         elements.newSearchImagePreview.classList.remove('hidden');
@@ -638,7 +682,7 @@ async function handleNewSearchFileSelect(file) {
         elements.newSearchUploadArea.classList.add('has-image');
 
         hideLoading();
-        showToast('✅ Imagen comprimida y lista', 'success');
+        showToast('✅ Imagen válida y lista', 'success');
     } catch (error) {
         console.error('Error procesando imagen:', error);
         showToast('Error al procesar la imagen', 'error');
@@ -939,9 +983,9 @@ async function loadMapLocations() {
                 });
 
                 const m = L.marker([pet.gpsLocation.latitude, pet.gpsLocation.longitude], { icon: markerIcon }).addTo(globalMap);
-                
-                const locationText = pet.city && pet.city.nombre && pet.city.provincia && pet.city.provincia.nombre 
-                    ? `${pet.city.nombre}, ${pet.city.provincia.nombre}` 
+
+                const locationText = pet.city && pet.city.nombre && pet.city.provincia && pet.city.provincia.nombre
+                    ? `${pet.city.nombre}, ${pet.city.provincia.nombre}`
                     : (pet.city && pet.city.nombre ? pet.city.nombre : 'Desconocida');
 
                 // Add popup
@@ -1139,4 +1183,9 @@ document.addEventListener('DOMContentLoaded', () => {
     checkApiHealth();
     fetchPets();
     loadProvincias(); // Cargar provincias al iniciar
+
+    // Iniciar carga del modelo en segundo plano
+    if (typeof AnimalDetector !== 'undefined') {
+        AnimalDetector.init();
+    }
 });

@@ -7,9 +7,9 @@ const securityHeaders = helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
-      scriptSrc: ["'self'", "https://unpkg.com"],
       imgSrc: ["'self'", "data:", "blob:", "https://*.tile.openstreetmap.org", "http://localhost:3005", "https://raw.githubusercontent.com", "https://cdnjs.cloudflare.com"],
-      connectSrc: ["'self'", "https://unpkg.com"],
+      connectSrc: ["'self'", "https://unpkg.com", "https://storage.googleapis.com"],
+      scriptSrc: ["'self'", "'unsafe-eval'", "https://unpkg.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
