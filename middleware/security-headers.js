@@ -3,6 +3,7 @@ const helmet = require('helmet');
 // Configuración de seguridad para headers
 const securityHeaders = helmet({
   // Configuraciones específicas de helmet
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],

@@ -215,6 +215,12 @@ function updateReverseSearchButton() {
 
 // Event Listeners for Upload
 elements.uploadArea.addEventListener('click', () => {
+    const city = elements.reverseSearchCity.value.trim();
+    if (!city) {
+        showToast('Primero debe seleccionar una ciudad', 'warning');
+        return;
+    }
+
     if (!state.reverseSearch.image) {
         elements.fileInput.click();
     }
@@ -244,6 +250,13 @@ elements.uploadArea.addEventListener('dragleave', () => {
 elements.uploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
     elements.uploadArea.classList.remove('dragover');
+
+    const city = elements.reverseSearchCity.value.trim();
+    if (!city) {
+        showToast('Primero debe seleccionar una ciudad', 'warning');
+        return;
+    }
+
     const file = e.dataTransfer.files[0];
     handleFileSelect(file);
 });
@@ -468,7 +481,7 @@ function createPetCard(pet, index = 0) {
             </div>
             <p class="pet-card-description">${pet.description}</p>
             <div class="pet-card-footer">
-                <a href="tel:${pet.phone}" class="pet-card-phone">📞 ${pet.phone}</a>
+                <a href="https://wa.me/${pet.phone.replace(/[^\d+]/g, '')}" target="_blank" rel="noopener noreferrer" class="pet-card-phone">📞 ${pet.phone}</a>
                 <span class="pet-card-date">${formatDate(pet.createdAt)}</span>
             </div>
         </div>
@@ -481,6 +494,16 @@ function createPetCard(pet, index = 0) {
             this.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect fill="#F3F4F6" width="200" height="150"/><text fill="#6b7280" x="100" y="75" text-anchor="middle" font-family="sans-serif">Sin imagen</text></svg>');
         });
     }
+
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('a') || e.target.closest('button')) return;
+        if (pet.gpsLocation?.latitude != null && pet.gpsLocation?.longitude != null) {
+            openMapModal(pet._id);
+        } else {
+            showToast('Esta mascota no tiene ubicación en el mapa', 'info');
+        }
+    });
 
     return card;
 }
@@ -922,7 +945,11 @@ if (elements.newSearchUploadArea) {
 let globalMap = null;
 let globalMapMarkers = [];
 
-function openMapModal() {
+function openMapModal(targetPetId = null) {
+    if (targetPetId && typeof targetPetId === 'object') {
+        targetPetId = null;
+    }
+
     elements.mapModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 
@@ -934,12 +961,12 @@ function openMapModal() {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             }).addTo(globalMap);
-            loadMapLocations();
+            loadMapLocations(targetPetId);
         }, 100);
     } else {
         setTimeout(() => {
             globalMap.invalidateSize();
-            loadMapLocations();
+            loadMapLocations(targetPetId);
         }, 100);
     }
 }
@@ -949,7 +976,7 @@ function closeMapModal() {
     document.body.style.overflow = '';
 }
 
-async function loadMapLocations() {
+async function loadMapLocations(targetPetId = null) {
     const loadingOverlay = document.getElementById('mapLoadingOverlay');
     if (loadingOverlay) loadingOverlay.classList.remove('hidden');
 
@@ -966,6 +993,8 @@ async function loadMapLocations() {
         // Clear existing markers
         globalMapMarkers.forEach(m => globalMap.removeLayer(m));
         globalMapMarkers = [];
+
+        let targetMarker = null;
 
         // Add pins
         locations.forEach(pet => {
@@ -989,8 +1018,8 @@ async function loadMapLocations() {
                     : (pet.city && pet.city.nombre ? pet.city.nombre : 'Desconocida');
 
                 // Add popup
-                const imgTag = pet.imageUrl || pet.imageUrls?.thumbnail ? `<img src="${pet.imageUrl || pet.imageUrls?.thumbnail}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="Mascota">` : '';
-                const phoneTag = pet.phone ? `<div style="font-size: 13px; color: #666; margin-bottom: 4px;">📞 <a href="tel:${pet.phone}">${pet.phone}</a></div>` : '';
+                const imgTag = pet.imageUrl || pet.imageUrls?.thumbnail ? `<img src="${pet.imageUrl || pet.imageUrls?.thumbnail}" style="width: 100%; height: auto; aspect-ratio: 4/5; max-height: 250px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="Mascota">` : '';
+                const phoneTag = pet.phone ? `<div style="font-size: 13px; color: #666; margin-bottom: 4px;">📞 <a href="https://wa.me/${pet.phone.replace(/[^\d+]/g, '')}" target="_blank" rel="noopener noreferrer">${pet.phone}</a></div>` : '';
 
                 m.bindPopup(`
                     <div style="text-align: center; min-width: 150px;">
@@ -1003,11 +1032,20 @@ async function loadMapLocations() {
                 `, { minWidth: 200 });
 
                 globalMapMarkers.push(m);
+                
+                if (targetPetId && pet._id === targetPetId) {
+                    targetMarker = m;
+                }
             }
         });
 
-        // Fit bounds if we have markers
-        if (globalMapMarkers.length > 0) {
+        // Fit bounds or center on target marker
+        if (targetMarker) {
+            globalMap.setView(targetMarker.getLatLng(), 16);
+            setTimeout(() => {
+                targetMarker.openPopup();
+            }, 300);
+        } else if (globalMapMarkers.length > 0) {
             const group = new L.featureGroup(globalMapMarkers);
             globalMap.fitBounds(group.getBounds().pad(0.1));
         }

@@ -187,7 +187,10 @@
 
                         <div class="form-group">
                             <label for="newSearchPhone">Teléfono de contacto *</label>
-                            <input type="tel" id="newSearchPhone" placeholder="Ej: 11 1234 5678" required>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="padding: 0 0.5rem; color: #6b7280; font-weight: 500; font-size: 1rem; user-select: none;">+54</span>
+                                <input type="tel" id="newSearchPhone" placeholder="Ej: 3765 123456" minlength="10" title="Debe contener al menos 10 números" required style="flex: 1;">
+                            </div>
                         </div>
                     </div>
 

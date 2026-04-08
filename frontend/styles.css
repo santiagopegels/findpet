@@ -957,7 +957,7 @@ textarea::placeholder {
 
 @media (max-width: 768px) {
     :root {
-        --sidebar-width: 100%;
+        --sidebar-width: 100vw;
     }
 
     .header-content {

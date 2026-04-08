@@ -56,8 +56,14 @@ const sanitizeInput = (req, res, next) => {
 
                 // Normalizar campos específicos
                 if (key === 'phone') {
-                    // Remover caracteres no numéricos del teléfono (excepto +)
-                    req.body[key] = req.body[key].replace(/[^\d+]/g, '');
+                    // Remover caracteres no numéricos (espacios, guiones, etc)
+                    let cleanPhone = req.body[key].replace(/\D/g, '');
+                    // Agregar +54 si no lo tiene. Evitar duplicar si el usuario incluyó 54
+                    if (cleanPhone.startsWith('54') && cleanPhone.length > 10) {
+                        req.body[key] = '+' + cleanPhone;
+                    } else {
+                        req.body[key] = '+54' + cleanPhone;
+                    }
                 }
             }
         });
