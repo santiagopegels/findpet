@@ -51,39 +51,39 @@ const SEED_PROVINCIAS = async () => {
         }
         console.log(`✅ ${provinciasGuardadas} provincias actualizadas/insertadas.`);
 
-        // 2. Fetch Ciudades (Localidades)
-        console.log('⬇️  Descargando localidades (max 5000)...');
-        const locResponse = await axios.get('https://apis.datos.gob.ar/georef/api/localidades?max=5000');
-        const localidadesData = locResponse.data.localidades;
+        // 2. Fetch Ciudades (Municipios)
+        console.log('⬇️  Descargando municipios (max 5000)...');
+        const munResponse = await axios.get('https://apis.datos.gob.ar/georef/api/municipios?max=5000');
+        const municipiosData = munResponse.data.municipios;
 
-        console.log(`📦 Procesando ${localidadesData.length} localidades...`);
+        console.log(`📦 Procesando ${municipiosData.length} municipios...`);
 
         let ciudadesGuardadas = 0;
         const chunkSize = 100;
         const chunks = [];
-        for (let i = 0; i < localidadesData.length; i += chunkSize) {
-            chunks.push(localidadesData.slice(i, i + chunkSize));
+        for (let i = 0; i < municipiosData.length; i += chunkSize) {
+            chunks.push(municipiosData.slice(i, i + chunkSize));
         }
 
         for (const chunk of chunks) {
-            const operations = chunk.map(loc => {
-                const provId = loc.provincia.id;
+            const operations = chunk.map(mun => {
+                const provId = mun.provincia.id;
                 const mongoProvId = provinciaMap[provId];
 
                 if (!mongoProvId) {
-                    console.warn(`⚠️  Provincia ID ${provId} no encontrada para localidad ${loc.nombre}`);
+                    console.warn(`⚠️  Provincia ID ${provId} no encontrada para municipio ${mun.nombre}`);
                     return null;
                 }
 
                 return Ciudad.findOneAndUpdate(
-                    { id: loc.id },
+                    { id: mun.id },
                     {
-                        nombre: loc.nombre,
-                        id: loc.id,
+                        nombre: mun.nombre,
+                        id: mun.id,
                         provincia: mongoProvId,
-                        centroide: loc.centroide ? {
-                            lat: loc.centroide.lat,
-                            lon: loc.centroide.lon
+                        centroide: mun.centroide ? {
+                            lat: mun.centroide.lat,
+                            lon: mun.centroide.lon
                         } : undefined
                     },
                     { upsert: true, new: true }
@@ -92,7 +92,7 @@ const SEED_PROVINCIAS = async () => {
 
             await Promise.all(operations);
             ciudadesGuardadas += chunk.length;
-            process.stdout.write(`\r⏳ Progreso ciudades: ${ciudadesGuardadas}/${localidadesData.length}`);
+            process.stdout.write(`\r⏳ Progreso ciudades: ${ciudadesGuardadas}/${municipiosData.length}`);
         }
 
         console.log('\n✅ Seed completado exitosamente.');
