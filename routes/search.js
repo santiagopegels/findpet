@@ -43,7 +43,6 @@ router.post('/',
       .isFloat({ min: -180, max: 180 }).withMessage('La longitud debe estar entre -180 y 180 grados'),
 
     check('phone', 'El teléfono es requerido').notEmpty()
-      .isMobilePhone('any', { strictMode: false }).withMessage('Formato de teléfono inválido')
       .isLength({ min: 8, max: 15 }).withMessage('El teléfono debe tener entre 8 y 15 dígitos'),
 
     check('type', 'El tipo es requerido').notEmpty()

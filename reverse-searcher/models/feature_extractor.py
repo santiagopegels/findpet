@@ -47,7 +47,7 @@ class FeatureExtractor:
             logger.error(f"Error cargando modelos: {e}")
             raise
     
-    def detect_and_crop(self, img: Union[Image.Image, np.ndarray, str]) -> Image.Image:
+    def detect_and_crop(self, img: Union[Image.Image, np.ndarray, str]) -> Tuple[Image.Image, dict]:
         """
         Detecta un perro o gato en la imagen y recorta al bounding box.
         
@@ -55,7 +55,8 @@ class FeatureExtractor:
             img: PIL Image, numpy array, o path a imagen
             
         Returns:
-            Imagen PIL recortada al animal detectado
+            Tuple de (imagen PIL recortada, info de detección)
+            detection_info: {class_id, class_name, confidence}
             
         Raises:
             NoAnimalDetectedError: Si no se detecta ningún perro o gato
@@ -67,7 +68,7 @@ class FeatureExtractor:
         results = self.yolo_model.predict(
             source=pil_img,
             conf=Config.YOLO_CONFIDENCE_THRESHOLD,
-            classes=Config.ANIMAL_CLASSES,  # Solo cat (16) y dog (17)
+            classes=Config.ANIMAL_CLASSES,  # Solo cat (15) y dog (16)
             verbose=False
         )
         
@@ -92,7 +93,13 @@ class FeatureExtractor:
         # Obtener información de la clase detectada
         class_id = int(boxes.cls[best_idx].cpu().numpy())
         class_name = self.yolo_model.names.get(class_id, "unknown")
-        confidence = confidences[best_idx]
+        confidence = float(confidences[best_idx])
+        
+        detection_info = {
+            'class_id': class_id,
+            'class_name': class_name,
+            'confidence': confidence
+        }
         
         logger.debug(f"Animal detectado: {class_name} con confianza {confidence:.2f}")
         logger.debug(f"Bounding box: [{x1}, {y1}, {x2}, {y2}]")
@@ -100,7 +107,7 @@ class FeatureExtractor:
         # Recortar la imagen al bounding box
         cropped_img = pil_img.crop((x1, y1, x2, y2))
         
-        return cropped_img
+        return cropped_img, detection_info
     
     def get_embedding(self, img: Image.Image) -> np.ndarray:
         """
@@ -124,7 +131,7 @@ class FeatureExtractor:
         return embedding
     
     @log_request_info
-    def extract(self, img: Union[Image.Image, np.ndarray, str]) -> np.ndarray:
+    def extract(self, img: Union[Image.Image, np.ndarray, str]) -> Tuple[np.ndarray, dict]:
         """
         Pipeline completo: detecta animal, recorta y genera embedding.
         
@@ -132,7 +139,8 @@ class FeatureExtractor:
             img: PIL Image, numpy array, o path a imagen
             
         Returns:
-            Vector de características normalizado (512 dimensiones)
+            Tuple de (vector de características normalizado 512D, info de detección)
+            detection_info: {class_id, class_name, confidence}
             
         Raises:
             NoAnimalDetectedError: Si no se detecta ningún perro o gato
@@ -149,7 +157,7 @@ class FeatureExtractor:
                 return self.feature_cache[img_hash]
             
             # Etapa 1: Detección y recorte con YOLOv8
-            cropped_img = self.detect_and_crop(pil_img)
+            cropped_img, detection_info = self.detect_and_crop(pil_img)
             
             # Etapa 2: Embedding con CLIP
             features = self.get_embedding(cropped_img)
@@ -159,12 +167,14 @@ class FeatureExtractor:
             if norm > 0:
                 features = features / norm
             
+            result = (features, detection_info)
+            
             # Guardar en cache (limitado a 100 elementos)
             if len(self.feature_cache) < 100:
-                self.feature_cache[img_hash] = features
+                self.feature_cache[img_hash] = result
             
-            logger.debug(f"Feature extraída: shape {features.shape}")
-            return features
+            logger.debug(f"Feature extraída: shape {features.shape}, clase: {detection_info['class_name']}")
+            return result
             
         except NoAnimalDetectedError:
             # Re-lanzar este error específico
@@ -215,7 +225,7 @@ class FeatureExtractor:
             
             for idx, img in enumerate(images):
                 try:
-                    features = self.extract(img)
+                    features, _detection_info = self.extract(img)
                     features_list.append(features)
                 except NoAnimalDetectedError as e:
                     logger.warning(f"Imagen {idx}: {str(e)}")

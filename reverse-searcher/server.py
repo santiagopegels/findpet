@@ -262,16 +262,18 @@ class ReverseSearchServer:
                 if not image_path.exists():
                     abort(400, description=f"Imagen no encontrada: {filename}_large.webp")
                 
-                # Extraer características
-                feature_vector = self.feature_extractor.extract(str(image_path))
+                # Extraer características y clase del animal detectado
+                feature_vector, detection_info = self.feature_extractor.extract(str(image_path))
                 
-                # Guardar en almacén vectorial
+                # Guardar en almacén vectorial con la clase del animal
                 self.vector_store.add_feature(
                     feature_id=filename,
                     feature_vector=feature_vector,
                     metadata={
                         'filename': filename,
                         'image_path': str(image_path),
+                        'animal_class': detection_info.get('class_name', 'unknown'),
+                        'detection_confidence': detection_info.get('confidence', 0),
                         'timestamp': time.time()
                     }
                 )
@@ -309,23 +311,26 @@ class ReverseSearchServer:
                 # Procesar imagen
                 processed_image = self.image_validator.preprocess_image(image_bytes)
                 
-                # Extraer características
-                query_features = self.feature_extractor.extract(processed_image)
+                # Extraer características y clase del animal de la imagen de búsqueda
+                query_features, query_detection = self.feature_extractor.extract(processed_image)
+                query_animal_class = query_detection.get('class_name', None)
+                
+                logger.info(f"Animal detectado en query: {query_animal_class} (confianza: {query_detection.get('confidence', 0):.2f})")
                 
                 # Filtrar IDs válidos (opcional: verificar que existen)
                 valid_ids = [str(id_).strip() for id_ in ids_to_search if id_]
                 
-                # Buscar imágenes similares
+                # Buscar imágenes similares SOLO entre los IDs de la ciudad
+                # y filtrando por la misma clase de animal (perro con perro, gato con gato).
                 similar_images = self.vector_store.search_similar(
                     query_vector=query_features,
-                    k=Config.MAX_SEARCH_RESULTS
+                    k=Config.MAX_SEARCH_RESULTS,
+                    filter_ids=set(valid_ids),
+                    filter_class=query_animal_class
                 )
                 
-                # Filtrar resultados por IDs solicitados
-                filtered_results_with_scores = [
-                    (img_id, score) for img_id, score in similar_images
-                    if img_id in valid_ids
-                ]
+                # similar_images ya viene filtrado por IDs, clase y MAX_L2_DISTANCE
+                filtered_results_with_scores = similar_images
                 
                 logger.info("Ranking de imágenes obtenidas (de más similar a menos similar):")
                 for rank, (img_id, score) in enumerate(filtered_results_with_scores, 1):

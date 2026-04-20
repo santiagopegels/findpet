@@ -163,7 +163,7 @@ class VectorStore:
                 logger.error(f"Error añadiendo feature {feature_id}: {e}")
                 raise
     
-    def search_similar(self, query_vector: np.ndarray, k: int = None) -> List[Tuple[str, float]]:
+    def search_similar(self, query_vector: np.ndarray, k: int = None, filter_ids: set = None, filter_class: str = None) -> List[Tuple[str, float]]:
         """
         Busca vectores similares usando distancia L2.
         
@@ -172,7 +172,12 @@ class VectorStore:
         
         Args:
             query_vector: Vector de consulta
-            k: Número de resultados a retornar
+            k: Número máximo de resultados a retornar
+            filter_ids: Set opcional de feature_ids permitidos. Si se proporciona,
+                        solo se devuelven resultados cuyo feature_id esté en este set.
+                        FAISS busca en todo el índice para no perder matches válidos.
+            filter_class: Clase de animal para filtrar (ej: 'dog', 'cat'). Si se proporciona,
+                          solo se devuelven resultados cuya metadata tenga la misma clase.
             
         Returns:
             Lista de (feature_id, distance) ordenada por distancia ascendente
@@ -196,14 +201,24 @@ class VectorStore:
                 # Verificar en cache si existe
                 query_hash = None
                 if self.redis_client:
-                    query_hash = str(hash(query_vector.tobytes()))
+                    # Incluir filter_ids y filter_class en el hash del cache
+                    filter_key = ','.join(sorted(filter_ids)) if filter_ids else 'all'
+                    class_key = filter_class or 'all'
+                    query_hash = str(hash(query_vector.tobytes() + filter_key.encode() + class_key.encode()))
                     cached_result = self.redis_client.get(f"search:{query_hash}:{k}")
                     if cached_result:
                         logger.debug("Resultado obtenido desde cache")
                         return json.loads(cached_result)
                 
-                # Buscar en FAISS (retorna distancias L2, no similitudes)
-                k_search = min(k, self.index.ntotal)
+                # Cuando se filtran por IDs específicos o por clase, buscar en TODO
+                # el índice para no perder matches válidos que estarían más allá del top-k global.
+                # IndexFlatL2 es búsqueda exhaustiva de todas formas, así que no hay
+                # penalización de rendimiento por buscar todos los vectores.
+                if filter_ids or filter_class:
+                    k_search = self.index.ntotal
+                else:
+                    k_search = min(k, self.index.ntotal)
+                
                 distances, indices = self.index.search(
                     query_vector.astype(np.float32), 
                     k_search
@@ -211,14 +226,30 @@ class VectorStore:
                 
                 # Procesar resultados
                 # Para L2: menor distancia = más similar
-                # Filtramos por MAX_L2_DISTANCE (umbral máximo de distancia)
+                # Filtramos por MAX_L2_DISTANCE, filter_ids y filter_class
                 results = []
                 for idx, dist in zip(indices[0], distances[0]):
                     if idx >= 0 and str(idx) in self.metadata:
-                        feature_id = self.metadata[str(idx)]['feature_id']
+                        entry = self.metadata[str(idx)]
+                        feature_id = entry['feature_id']
+                        
+                        # Filtrar por IDs permitidos si se proporcionaron
+                        if filter_ids and feature_id not in filter_ids:
+                            continue
+                        
+                        # Filtrar por clase de animal (perro con perro, gato con gato)
+                        if filter_class:
+                            stored_class = entry.get('metadata', {}).get('animal_class', None)
+                            if stored_class and stored_class != filter_class:
+                                continue
+                        
                         # Filtrar por umbral de distancia máxima
                         if dist <= Config.MAX_L2_DISTANCE:
                             results.append((feature_id, float(dist)))
+                        
+                        # Si ya tenemos suficientes resultados, cortar
+                        if len(results) >= k:
+                            break
                 
                 # Guardar en cache
                 if self.redis_client and query_hash:
@@ -231,7 +262,7 @@ class VectorStore:
                     except:
                         pass
                 
-                logger.debug(f"Búsqueda completada: {len(results)} resultados")
+                logger.debug(f"Búsqueda completada: {len(results)} resultados (filter_ids: {len(filter_ids) if filter_ids else 'none'}, filter_class: {filter_class or 'none'})")
                 return results
                 
             except Exception as e:
