@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Findog - Encuentra tu mascota</title>
+    <title>Peya - Encuentra tu mascota</title>
     <meta name="description"
         content="Aplicación para encontrar mascotas perdidas usando reconocimiento de imágenes con IA">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,6 +13,7 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
         media="all">
+    <link rel="icon" type="image/png" href="assets/icon.png">
     <noscript>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
             rel="stylesheet">
@@ -31,8 +32,8 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <span class="logo-icon">🐕</span>
-                    <h1>Findog</h1>
+                    <img src="assets/icon.png" alt="Peya" class="logo-icon">
+                    <h1>Peya</h1>
                 </div>
 
                 <button class="btn btn-primary" id="openNewSearchBtn" style="margin-right: 1rem; border-radius: 2rem;">
@@ -57,7 +58,8 @@
             <!-- Stats Info Bar -->
             <div class="stats-bar" id="statsBar">
                 <span class="stats-text" id="statsText">Cargando mascotas...</span>
-                <button class="btn btn-outline" id="openMapBtn" style="border-radius: 2rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; padding: 0.4rem 1rem;">
+                <button class="btn btn-outline" id="openMapBtn"
+                    style="border-radius: 2rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; padding: 0.4rem 1rem;">
                     <svg style="width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2">
                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -102,7 +104,8 @@
                 <div class="sidebar-header">
                     <div style="display: flex; align-items: baseline; gap: 1rem;">
                         <h2 style="margin: 0;">Filtros</h2>
-                        <button id="clearFiltersBtn" style="background: transparent; border: none; color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; padding: 0; text-decoration: underline;">Limpiar</button>
+                        <button id="clearFiltersBtn"
+                            style="background: transparent; border: none; color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; padding: 0; text-decoration: underline;">Limpiar</button>
                     </div>
                     <button class="btn-close" id="closeSidebarBtn">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -167,7 +170,7 @@
         <div class="modal-overlay hidden" id="newSearchModal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Nueva Búsqueda</h2>
+                    <h2>Nueva Búsqueda (Duración de 30 días)</h2>
                     <button class="btn-close" id="closeNewSearchBtn">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 6L6 18M6 6l12 12" />
@@ -188,8 +191,10 @@
                         <div class="form-group">
                             <label for="newSearchPhone">Teléfono de contacto *</label>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <span style="padding: 0 0.5rem; color: #6b7280; font-weight: 500; font-size: 1rem; user-select: none;">+54</span>
-                                <input type="tel" id="newSearchPhone" placeholder="Ej: 3765 123456" minlength="10" title="Debe contener al menos 10 números" required style="flex: 1;">
+                                <span
+                                    style="padding: 0 0.5rem; color: #6b7280; font-weight: 500; font-size: 1rem; user-select: none;">+54</span>
+                                <input type="tel" id="newSearchPhone" placeholder="Ej: 3765 123456" minlength="10"
+                                    title="Debe contener al menos 10 números" required style="flex: 1;">
                             </div>
                         </div>
                     </div>
@@ -211,7 +216,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Ubicación donde se encontró *</label>
+                        <label>Ubicación donde se encontró/perdió *</label>
                         <p class="form-hint">Haz clic en el mapa para marcar la ubicación exacta</p>
 
 
@@ -270,10 +275,12 @@
                     </button>
                 </div>
                 <div class="modal-body" style="padding: 0; position: relative;">
-                    <div id="globalMapContainer" class="map-container" style="height: 70vh; margin: 0; border-radius: 0 0 1rem 1rem;">
+                    <div id="globalMapContainer" class="map-container"
+                        style="height: 70vh; margin: 0; border-radius: 0 0 1rem 1rem;">
                         <div id="globalMap" style="height: 100%; border-radius: 0 0 1rem 1rem; z-index: 1;"></div>
                     </div>
-                    <div id="mapLoadingOverlay" class="loading-overlay hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 0 0 1rem 1rem; z-index: 2; background: rgba(0,0,0,0.5);">
+                    <div id="mapLoadingOverlay" class="loading-overlay hidden"
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 0 0 1rem 1rem; z-index: 2; background: rgba(0,0,0,0.5);">
                         <div class="loading-spinner"></div>
                         <p style="margin-top: 1rem; color: white; font-weight: 500;">Cargando ubicaciones...</p>
                     </div>
