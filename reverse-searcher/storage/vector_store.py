@@ -356,10 +356,9 @@ class VectorStore:
                 'redis_enabled': self.redis_client is not None
             }
     
-    def __del__(self):
-        """Limpieza al destruir el objeto"""
-        try:
-            if hasattr(self, 'index') and self.index is not None:
-                self._save_index()
-        except:
-            pass
+    # NOTA: No implementamos __del__ para guardar el índice.
+    # Durante el shutdown de Python, los built-ins (como open) ya no están
+    # disponibles, lo que causa "name 'open' is not defined" y puede
+    # corromper el índice guardando un estado vacío/parcial.
+    # _save_index() ya se llama después de cada add_feature() y remove_features(),
+    # por lo que los datos siempre están persistidos en disco.
