@@ -333,6 +333,9 @@ const reverseSearch = async (req, res, next) => {
                             candidateCount: searchIdsArray.length
                         });
                     } else {
+                        filters._id = { $in: [] };
+                        searchMethod = 'ai_similarity';
+
                         logAppEvent('ML_SIMILARITY_SEARCH_NO_RESULTS', {
                             city,
                             candidateCount: searchIdsArray.length
@@ -344,10 +347,14 @@ const reverseSearch = async (req, res, next) => {
                         candidateCount: searchIdsArray.length
                     });
 
-                    // Si falla ML, continuar con búsqueda por ciudad
-                    searchMethod = 'city_fallback';
+                    // Si falla ML, no continuar con búsqueda por ciudad
+                    filters._id = { $in: [] };
+                    searchMethod = 'ml_error';
                 }
             } else {
+                filters._id = { $in: [] };
+                searchMethod = 'ai_similarity';
+
                 logAppEvent('REVERSE_SEARCH_NO_CANDIDATES', {
                     city
                 });
@@ -466,7 +473,7 @@ const getMapLocations = async (req, res, next) => {
                     populate: { path: 'provincia', select: 'nombre' }
                 })
                 .lean(); // Faster query without mongoose document overhead
-            
+
             return {
                 locations: addImagePathToSearches(searches)
             };
@@ -479,7 +486,7 @@ const getMapLocations = async (req, res, next) => {
         );
 
         const duration = Date.now() - startTime;
-        
+
         return res.status(200).json(formatApiResponse(true, result, 'Ubicaciones obtenidas exitosamente', {
             processingTime: `${duration}ms`,
             count: result.locations.length
