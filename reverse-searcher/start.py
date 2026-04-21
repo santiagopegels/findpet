@@ -27,9 +27,8 @@ def check_dependencies():
         from sentence_transformers import SentenceTransformer
         logger.info("✅ SentenceTransformers (CLIP) OK")
         
-        import faiss
-        faiss_version = getattr(faiss, '__version__', 'unknown')
-        logger.info(f"✅ FAISS {faiss_version}")
+        from qdrant_client import QdrantClient
+        logger.info("✅ Qdrant Client OK")
         
         import redis
         logger.info(f"✅ Redis {redis.__version__}")
@@ -103,7 +102,7 @@ def test_server_components():
         from storage.vector_store import VectorStore
         vector_store = VectorStore()
         stats = vector_store.get_stats()
-        logger.info(f"✅ Almacén vectorial: {stats['total_vectors']} vectores ({stats['index_type']})")
+        logger.info(f"✅ Almacén vectorial (Qdrant): {stats['total_vectors']} vectores")
         
         # Test del validador de imágenes
         from utils.image_validator import ImageValidator

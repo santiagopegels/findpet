@@ -15,7 +15,6 @@ services:
       # que el mount de código fuente ./reverse-searcher:/app lo tape.
       # La variable IMAGES_DIR le dice al servidor Python dónde buscar.
       - ./images:/shared/images
-      - ./reverse-searcher/features:/app/features
       - ./reverse-searcher/models:/app/models
       - ./reverse-searcher/logs:/app/logs
 
@@ -26,6 +25,9 @@ services:
       LOG_FORMAT: "text"
       # Directorio compartido de imágenes con findog-app
       IMAGES_DIR: /shared/images
+      # Qdrant para desarrollo
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
 
     # Comando de desarrollo con auto-reload
     command: python start.py --debug --skip-checks

@@ -42,6 +42,27 @@ services:
       - findog-network
 
   # ================================
+  # Qdrant - Base de datos vectorial
+  # ================================
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: findog-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - findog-network
+
+  # ================================
   # Reverse Searcher - Servidor ML Python
   # ================================
   reverse-searcher:
@@ -75,13 +96,16 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: 0
       
+      # Qdrant Configuration
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:
-      # Persistir imágenes y características
+      # Persistir imágenes y modelos
       - ./images:/app/images
-      - ./reverse-searcher/features:/app/features
       - ./reverse-searcher/models:/app/models
       - ./reverse-searcher/logs:/app/logs
       # Para testing
@@ -89,6 +113,8 @@ services:
       - ./reverse-searcher/test-results:/app/test-results
     depends_on:
       redis:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -198,6 +224,8 @@ volumes:
   mongo-data:
     driver: local
   redis-data:
+    driver: local
+  qdrant-data:
     driver: local
   prometheus-data:
     driver: local

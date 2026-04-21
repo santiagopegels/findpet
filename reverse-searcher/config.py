@@ -25,9 +25,11 @@ class Config:
     
     # Storage Configuration
     IMAGES_DIR = Path(os.getenv('IMAGES_DIR', './images'))
-    FEATURES_DIR = Path('./features')
-    FAISS_INDEX_PATH = Path('./features/faiss_index.bin')
-    METADATA_PATH = Path('./features/metadata.json')
+    
+    # Qdrant Configuration
+    QDRANT_HOST = os.getenv('QDRANT_HOST', 'localhost')
+    QDRANT_PORT = int(os.getenv('QDRANT_PORT', 6333))
+    QDRANT_COLLECTION = os.getenv('QDRANT_COLLECTION', 'pet_features')
     
     # Redis Configuration (for caching)
     REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
@@ -73,5 +75,4 @@ class Config:
     def setup_directories(cls):
         """Crea directorios necesarios"""
         cls.IMAGES_DIR.mkdir(exist_ok=True)
-        cls.FEATURES_DIR.mkdir(exist_ok=True)
         Path(cls.MODEL_PATH).mkdir(exist_ok=True)

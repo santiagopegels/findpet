@@ -479,7 +479,7 @@ function createPetCard(pet, index = 0) {
                 <span>📍</span>
                 <span>${locationText}</span>
             </div>
-            <p class="pet-card-description">${pet.description}</p>
+            <p class="pet-card-description" title="${(pet.description || '').replace(/"/g, '&quot;')}">${pet.description}</p>
             <div class="pet-card-footer">
                 <a href="https://wa.me/${pet.phone.replace(/[^\d+]/g, '')}" target="_blank" rel="noopener noreferrer" class="pet-card-phone">📞 ${pet.phone}</a>
                 <span class="pet-card-date">${formatDate(pet.createdAt)}</span>
@@ -1027,12 +1027,12 @@ async function loadMapLocations(targetPetId = null) {
                         <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; background: ${pet.type === 'LOST' ? '#ffebee' : '#e8f5e9'}; color: ${pet.type === 'LOST' ? '#ef5350' : '#4caf50'}; margin-bottom: 8px;">${typeLabel}</span>
                         <div style="font-weight: bold; margin-bottom: 4px;">📍 ${locationText}</div>
                         ${phoneTag}
-                        <p style="font-size: 12px; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${pet.description || ''}</p>
+                        <p style="font-size: 12px; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;" title="${(pet.description || '').replace(/"/g, '&quot;')}">${pet.description || ''}</p>
                     </div>
                 `, { minWidth: 200 });
 
                 globalMapMarkers.push(m);
-                
+
                 if (targetPetId && pet._id === targetPetId) {
                     targetMarker = m;
                 }

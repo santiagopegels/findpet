@@ -9,7 +9,7 @@
 **Findog** es una plataforma para reportar mascotas perdidas y encontradas. Permite:
 
 - **Búsqueda tradicional**: listar búsquedas por ciudad, tipo (FIND/LOST), fechas
-- **Búsqueda inversa por imagen**: subir una foto y encontrar imágenes similares usando ML (detección YOLOv8 + embeddings CLIP + FAISS)
+- **Búsqueda inversa por imagen**: subir una foto y encontrar imágenes similares usando ML (detección YOLOv8 + embeddings CLIP + Qdrant)
 - **Mapa de ubicaciones**: visualizar búsquedas geográficamente
 - **Georreferenciación**: provincias y ciudades de Argentina (API GEOREF)
 
@@ -75,7 +75,7 @@ findog/
 │   ├── start.py           # Entry point
 │   ├── config.py
 │   ├── models/feature_extractor.py  # YOLOv8 + CLIP
-│   ├── storage/vector_store.py     # FAISS + Redis
+│   ├── storage/vector_store.py     # Qdrant + Redis
 │   ├── utils/logger.py, image_validator.py
 │   ├── scripts/docker-helper.sh
 │   └── tests/
@@ -102,8 +102,8 @@ findog/
               [reverse-searcher :5000]             │
                       │                            │
                       ▼                            │
-              [FAISS + features]                   │
-              [Redis :6379] ◄─────────────────────┘
+              [Qdrant :6333]                       │
+              [Redis :6379] ◄───────────────────┘
                    (cache)
 ```
 
@@ -111,7 +111,7 @@ findog/
 
 - **Autenticación**: header `X-API-KEY` (mismo valor que `MACHINE_LEARNING_API_KEY` / `API_KEY`)
 - **Endpoints**:
-  - `POST /save-feature`: extraer características y guardar en FAISS
+  - `POST /save-feature`: extraer características y guardar en Qdrant
   - `POST /reverse-search`: buscar imágenes similares
   - `DELETE /remove-features`: borrar características por IDs
   - `GET /health`: health check
@@ -190,10 +190,11 @@ findog/
 1. **YOLOv8** detecta perro/gato (COCO classes 15=cat, 16=dog), recorta bounding box
 2. **CLIP (ViT-B-32)** genera embedding 512D
 3. **Normalización L2** del vector
-4. **FAISS IndexFlatL2** para búsqueda por distancia L2
-5. Filtro por `MAX_L2_DISTANCE` (menor distancia = más similar)
+4. **Qdrant** (colección `pet_features`, distancia Euclid/L2) almacena vectores con payloads
+5. Filtro nativo por `animal_class` (payload) y por IDs (HasIdCondition)
+6. Filtro por `MAX_L2_DISTANCE` (score_threshold, menor distancia = más similar)
 
-Config: `config.py` (YOLO_MODEL, CLIP_MODEL, FEATURE_DIMENSION=512, MAX_L2_DISTANCE).
+Config: `config.py` (YOLO_MODEL, CLIP_MODEL, FEATURE_DIMENSION=512, MAX_L2_DISTANCE, QDRANT_HOST, QDRANT_PORT).
 
 ---
 
@@ -252,6 +253,7 @@ LOG_LEVEL, LOG_FORMAT, LOGS_DIR
 API_KEY, HOST, PORT, DEBUG
 YOLO_MODEL, CLIP_MODEL, YOLO_CONFIDENCE_THRESHOLD
 MAX_IMAGE_SIZE, MAX_SEARCH_RESULTS, MAX_L2_DISTANCE
+QDRANT_HOST, QDRANT_PORT, QDRANT_COLLECTION
 REDIS_ENABLED, REDIS_HOST, REDIS_PORT
 IMAGES_DIR, LOG_LEVEL, LOG_FORMAT
 ```
@@ -262,6 +264,7 @@ IMAGES_DIR, LOG_LEVEL, LOG_FORMAT
 |----------|--------|
 | mongo | 27017 |
 | redis | 6379 |
+| qdrant | 6333 (REST), 6334 (gRPC) |
 | reverse-searcher | 5000 |
 | app | 3000 (dev) / 3005 (prod) |
 
@@ -290,13 +293,13 @@ npm run seed:georef  # Cargar provincias/ciudades
 2. Procesar imagen con Sharp → thumbnail, medium, large
 3. Guardar en storage (local/S3 según configuración)
 4. Crear documento Search en MongoDB
-5. Llamar **asíncronamente** a `saveImageFeature` en ML para extraer y guardar features en FAISS
+5. Llamar **asíncronamente** a `saveImageFeature` en ML para extraer y guardar features en Qdrant
 
 ### Reverse search (POST /api/search/reverse-search)
 
 1. Obtener IDs de búsquedas por ciudad (desde cache o MongoDB)
 2. Enviar imagen base64 + IDs al ML
-3. ML extrae embedding, busca en FAISS (solo entre esos IDs), devuelve IDs ordenados por similitud
+3. ML extrae embedding, busca en Qdrant (filtrando por esos IDs y clase de animal), devuelve IDs ordenados por similitud
 4. Node reordena documentos y devuelve resultados con metadatos
 
 ### Cron de limpieza (removeSearchesCron)
@@ -334,5 +337,7 @@ npm run seed:georef  # Cargar provincias/ciudades
 - Responder en **español** salvo que se pida otro idioma
 - Usar Context7 cuando necesites documentación de librerías
 - La app tolera Redis caído; no asumas que Redis está siempre disponible
-- Los IDs de features en FAISS son distintos de los ObjectIds de Search en MongoDB; el mapeo se hace por `feature_id` en metadata del vector store
-- La búsqueda inversa **siempre** filtra por ciudad; el ML solo devuelve orden de similitud entre los IDs enviados
+- Los vectores se almacenan en Qdrant (colección `pet_features`); cada punto tiene un UUID5 generado determinísticamente a partir del `feature_id` (MongoDB ObjectId string)
+- Los payloads de Qdrant incluyen `feature_id`, `animal_class`, `detection_confidence`, `filename`, `image_path`, `timestamp`
+- La búsqueda inversa **siempre** filtra por ciudad (HasIdCondition con UUIDs) y opcionalmente por clase de animal (FieldCondition en payload)
+- Qdrant reemplazó a FAISS; ya no existen `faiss_index.bin` ni `metadata.json`

@@ -1,22 +1,36 @@
-import faiss
 import numpy as np
 import json
 import threading
-from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+import uuid
+from typing import List, Tuple, Dict, Optional, Set
 from config import Config
 from utils.logger import logger
 import redis
 
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    VectorParams,
+    PointStruct,
+    Filter,
+    FieldCondition,
+    MatchValue,
+    HasIdCondition,
+    FilterSelector,
+    SearchParams,
+)
+
+
 class VectorStore:
-    """Sistema de almacenamiento vectorial optimizado con FAISS usando distancia L2"""
-    
+    """Sistema de almacenamiento vectorial con Qdrant"""
+
+    COLLECTION_NAME = "pet_features"
+
     def __init__(self):
-        self.index = None
-        self.metadata = {}
         self.lock = threading.RLock()
         self.redis_client = None
-        
+        self.qdrant = None
+
         # Configurar Redis si está habilitado
         if Config.REDIS_ENABLED:
             try:
@@ -26,7 +40,7 @@ class VectorStore:
                     db=Config.REDIS_DB,
                     decode_responses=True,
                     socket_timeout=5,
-                    socket_connect_timeout=5
+                    socket_connect_timeout=5,
                 )
                 # Test connection
                 self.redis_client.ping()
@@ -34,91 +48,88 @@ class VectorStore:
             except Exception as e:
                 logger.warning(f"No se pudo conectar a Redis: {e}")
                 self.redis_client = None
-        
-        self._initialize_index()
-    
-    def _initialize_index(self):
-        """Inicializa el índice FAISS"""
+
+        self._initialize_qdrant()
+
+    def _initialize_qdrant(self):
+        """Inicializa la conexión a Qdrant y crea la colección si no existe"""
         with self.lock:
             try:
-                # Intentar cargar índice existente
-                if Config.FAISS_INDEX_PATH.exists() and Config.METADATA_PATH.exists():
-                    self._load_index()
+                self.qdrant = QdrantClient(
+                    host=Config.QDRANT_HOST,
+                    port=Config.QDRANT_PORT,
+                    timeout=30,
+                )
 
-                    # Verificar que la dimensión del índice coincide con la configuración actual.
-                    # Si cambia el modelo (ej. de dim 1280 a 512), el índice guardado queda
-                    # incompatible y FAISS lanza AssertionError al intentar agregar vectores.
-                    if self.index.d != Config.FEATURE_DIMENSION:
-                        logger.warning(
-                            f"Dimensión del índice en disco ({self.index.d}) no coincide con "
-                            f"la configuración actual ({Config.FEATURE_DIMENSION}). "
-                            f"Recreando índice vacío."
-                        )
-                        # Eliminar archivos incompatibles y crear uno nuevo
-                        try:
-                            Config.FAISS_INDEX_PATH.unlink(missing_ok=True)
-                            Config.METADATA_PATH.unlink(missing_ok=True)
-                        except Exception:
-                            pass
-                        self._create_new_index()
-                        logger.info(f"Nuevo índice FAISS L2 creado con dimensión {Config.FEATURE_DIMENSION}")
-                    else:
-                        logger.info(f"Índice FAISS cargado: {self.index.ntotal} vectores (dim={self.index.d})")
+                # Verificar conexión
+                self.qdrant.get_collections()
+                logger.info(
+                    f"Qdrant conectado exitosamente en {Config.QDRANT_HOST}:{Config.QDRANT_PORT}"
+                )
+
+                # Crear colección si no existe
+                collections = [
+                    c.name for c in self.qdrant.get_collections().collections
+                ]
+
+                if self.COLLECTION_NAME not in collections:
+                    self.qdrant.create_collection(
+                        collection_name=self.COLLECTION_NAME,
+                        vectors_config=VectorParams(
+                            size=Config.FEATURE_DIMENSION,
+                            distance=Distance.EUCLID,
+                        ),
+                    )
+                    logger.info(
+                        f"Colección '{self.COLLECTION_NAME}' creada con dimensión {Config.FEATURE_DIMENSION} (L2/Euclid)"
+                    )
                 else:
-                    # Crear nuevo índice
-                    self._create_new_index()
-                    logger.info(f"Nuevo índice FAISS L2 creado con dimensión {Config.FEATURE_DIMENSION}")
+                    info = self.qdrant.get_collection(self.COLLECTION_NAME)
+                    logger.info(
+                        f"Colección '{self.COLLECTION_NAME}' existente: {info.points_count} puntos"
+                    )
+
+                    # Verificar dimensión
+                    if info.config.params.vectors.size != Config.FEATURE_DIMENSION:
+                        logger.warning(
+                            f"Dimensión de colección ({info.config.params.vectors.size}) no coincide "
+                            f"con configuración ({Config.FEATURE_DIMENSION}). Recreando colección."
+                        )
+                        self.qdrant.delete_collection(self.COLLECTION_NAME)
+                        self.qdrant.create_collection(
+                            collection_name=self.COLLECTION_NAME,
+                            vectors_config=VectorParams(
+                                size=Config.FEATURE_DIMENSION,
+                                distance=Distance.EUCLID,
+                            ),
+                        )
+                        logger.info(
+                            f"Colección recreada con dimensión {Config.FEATURE_DIMENSION}"
+                        )
+
             except Exception as e:
-                logger.error(f"Error inicializando índice: {e}")
-                self._create_new_index()
-    
-    def _create_new_index(self):
-        """Crea un nuevo índice FAISS vacío usando distancia L2"""
-        # Usar IndexFlatL2 para distancia euclidiana
-        # Menor distancia = más similar
-        self.index = faiss.IndexFlatL2(Config.FEATURE_DIMENSION)
-        self.metadata = {}
+                logger.error(f"Error inicializando Qdrant: {e}")
+                raise
+
+    @staticmethod
+    def _feature_id_to_uuid(feature_id: str) -> str:
+        """Convierte un feature_id string a un UUID determinístico para Qdrant.
         
-        # Guardar índice vacío
-        self._save_index()
-    
-    def _load_index(self):
-        """Carga índice existente desde disco"""
-        try:
-            self.index = faiss.read_index(str(Config.FAISS_INDEX_PATH))
-            
-            with open(Config.METADATA_PATH, 'r') as f:
-                self.metadata = json.load(f)
-                
-        except Exception as e:
-            logger.error(f"Error cargando índice: {e}")
-            raise
-    
-    def _save_index(self):
-        """Guarda índice en disco"""
-        try:
-            Config.FEATURES_DIR.mkdir(exist_ok=True)
-            
-            # Guardar índice FAISS
-            faiss.write_index(self.index, str(Config.FAISS_INDEX_PATH))
-            
-            # Guardar metadata
-            with open(Config.METADATA_PATH, 'w') as f:
-                json.dump(self.metadata, f, indent=2)
-                
-            logger.debug("Índice guardado exitosamente")
-            
-        except Exception as e:
-            logger.error(f"Error guardando índice: {e}")
-            raise
-    
-    def add_feature(self, feature_id: str, feature_vector: np.ndarray, metadata: Dict = None):
+        Qdrant requiere UUIDs o enteros como IDs de punto.
+        Usamos UUID5 basado en el feature_id para generar un ID determinístico,
+        de modo que el mismo feature_id siempre produce el mismo UUID.
         """
-        Añade un vector de características al índice
-        
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, feature_id))
+
+    def add_feature(
+        self, feature_id: str, feature_vector: np.ndarray, metadata: Dict = None
+    ):
+        """
+        Añade un vector de características a Qdrant
+
         Args:
-            feature_id: ID único del feature
-            feature_vector: Vector de características normalizado
+            feature_id: ID único del feature (ej: MongoDB ObjectId string)
+            feature_vector: Vector de características
             metadata: Metadata adicional asociada al feature
         """
         with self.lock:
@@ -126,239 +137,246 @@ class VectorStore:
                 # Normalizar vector para consistencia en búsqueda L2
                 if np.linalg.norm(feature_vector) > 0:
                     feature_vector = feature_vector / np.linalg.norm(feature_vector)
-                
+
                 # Asegurar formato correcto
-                if feature_vector.ndim == 1:
-                    feature_vector = feature_vector.reshape(1, -1)
-                
+                if feature_vector.ndim != 1:
+                    feature_vector = feature_vector.flatten()
+
                 # Verificar dimensión
-                if feature_vector.shape[1] != Config.FEATURE_DIMENSION:
-                    raise ValueError(f"Dimensión incorrecta: {feature_vector.shape[1]} != {Config.FEATURE_DIMENSION}")
-                
-                # Añadir al índice
-                current_id = self.index.ntotal
-                self.index.add(feature_vector.astype(np.float32))
-                
-                # Guardar metadata
-                self.metadata[str(current_id)] = {
-                    'feature_id': feature_id,
-                    'metadata': metadata or {},
-                    'timestamp': str(np.datetime64('now'))
+                if feature_vector.shape[0] != Config.FEATURE_DIMENSION:
+                    raise ValueError(
+                        f"Dimensión incorrecta: {feature_vector.shape[0]} != {Config.FEATURE_DIMENSION}"
+                    )
+
+                # Construir payload con metadata
+                payload = {
+                    "feature_id": feature_id,
+                    **(metadata or {}),
                 }
-                
+
+                # Generar UUID determinístico a partir del feature_id
+                point_id = self._feature_id_to_uuid(feature_id)
+
+                # Upsert en Qdrant (inserta o actualiza si ya existe)
+                self.qdrant.upsert(
+                    collection_name=self.COLLECTION_NAME,
+                    points=[
+                        PointStruct(
+                            id=point_id,
+                            vector=feature_vector.astype(np.float32).tolist(),
+                            payload=payload,
+                        )
+                    ],
+                )
+
                 # Invalidar cache si existe
                 if self.redis_client:
                     try:
-                        self.redis_client.delete(f"search:*")
-                    except:
+                        self.redis_client.delete("search:*")
+                    except Exception:
                         pass
-                
-                # Persistir inmediatamente para no perder datos si el servidor reinicia
-                self._save_index()
-                
-                logger.debug(f"Feature añadido: {feature_id} -> índice {current_id}")
-                return current_id
-                
+
+                logger.debug(f"Feature añadido a Qdrant: {feature_id} -> {point_id}")
+                return point_id
+
             except Exception as e:
                 logger.error(f"Error añadiendo feature {feature_id}: {e}")
                 raise
-    
-    def search_similar(self, query_vector: np.ndarray, k: int = None, filter_ids: set = None, filter_class: str = None) -> List[Tuple[str, float]]:
+
+    def search_similar(
+        self,
+        query_vector: np.ndarray,
+        k: int = None,
+        filter_ids: Set[str] = None,
+        filter_class: str = None,
+    ) -> List[Tuple[str, float]]:
         """
-        Busca vectores similares usando distancia L2.
-        
+        Busca vectores similares usando distancia L2 (Euclid).
+
         Para L2: menor distancia = más similar.
         Retorna resultados ordenados de más similar a menos similar.
-        
+
         Args:
             query_vector: Vector de consulta
             k: Número máximo de resultados a retornar
             filter_ids: Set opcional de feature_ids permitidos. Si se proporciona,
                         solo se devuelven resultados cuyo feature_id esté en este set.
-                        FAISS busca en todo el índice para no perder matches válidos.
             filter_class: Clase de animal para filtrar (ej: 'dog', 'cat'). Si se proporciona,
                           solo se devuelven resultados cuya metadata tenga la misma clase.
-            
+
         Returns:
             Lista de (feature_id, distance) ordenada por distancia ascendente
         """
         if k is None:
             k = Config.MAX_SEARCH_RESULTS
-        
+
         with self.lock:
             try:
-                if self.index.ntotal == 0:
+                collection_info = self.qdrant.get_collection(self.COLLECTION_NAME)
+                if collection_info.points_count == 0:
                     return []
-                
+
                 # Normalizar query vector
                 if np.linalg.norm(query_vector) > 0:
                     query_vector = query_vector / np.linalg.norm(query_vector)
-                
+
                 # Asegurar formato correcto
-                if query_vector.ndim == 1:
-                    query_vector = query_vector.reshape(1, -1)
-                
+                if query_vector.ndim != 1:
+                    query_vector = query_vector.flatten()
+
                 # Verificar en cache si existe
                 query_hash = None
                 if self.redis_client:
-                    # Incluir filter_ids y filter_class en el hash del cache
-                    filter_key = ','.join(sorted(filter_ids)) if filter_ids else 'all'
-                    class_key = filter_class or 'all'
-                    query_hash = str(hash(query_vector.tobytes() + filter_key.encode() + class_key.encode()))
+                    filter_key = (
+                        ",".join(sorted(filter_ids)) if filter_ids else "all"
+                    )
+                    class_key = filter_class or "all"
+                    query_hash = str(
+                        hash(
+                            query_vector.tobytes()
+                            + filter_key.encode()
+                            + class_key.encode()
+                        )
+                    )
                     cached_result = self.redis_client.get(f"search:{query_hash}:{k}")
                     if cached_result:
                         logger.debug("Resultado obtenido desde cache")
                         return json.loads(cached_result)
-                
-                # Cuando se filtran por IDs específicos o por clase, buscar en TODO
-                # el índice para no perder matches válidos que estarían más allá del top-k global.
-                # IndexFlatL2 es búsqueda exhaustiva de todas formas, así que no hay
-                # penalización de rendimiento por buscar todos los vectores.
-                if filter_ids or filter_class:
-                    k_search = self.index.ntotal
-                else:
-                    k_search = min(k, self.index.ntotal)
-                
-                distances, indices = self.index.search(
-                    query_vector.astype(np.float32), 
-                    k_search
+
+                # Construir filtros nativos de Qdrant
+                must_conditions = []
+
+                # Filtrar por IDs permitidos (feature_ids de la ciudad)
+                if filter_ids:
+                    # Convertir feature_ids a UUIDs de Qdrant
+                    qdrant_ids = [
+                        self._feature_id_to_uuid(fid) for fid in filter_ids
+                    ]
+                    must_conditions.append(HasIdCondition(has_id=qdrant_ids))
+
+                # Filtrar por clase de animal
+                if filter_class:
+                    must_conditions.append(
+                        FieldCondition(
+                            key="animal_class",
+                            match=MatchValue(value=filter_class),
+                        )
+                    )
+
+                search_filter = (
+                    Filter(must=must_conditions) if must_conditions else None
                 )
-                
+
+                # Buscar en Qdrant
+                # Qdrant maneja internamente la búsqueda con filtros pre-aplicados
+                query_response = self.qdrant.search(
+                    collection_name=self.COLLECTION_NAME,
+                    query_vector=query_vector.astype(np.float32).tolist(),
+                    query_filter=search_filter,
+                    limit=k,
+                    score_threshold=Config.MAX_L2_DISTANCE,
+                    with_payload=True,
+                )
+                results = query_response
+
                 # Procesar resultados
-                # Para L2: menor distancia = más similar
-                # Filtramos por MAX_L2_DISTANCE, filter_ids y filter_class
-                results = []
-                for idx, dist in zip(indices[0], distances[0]):
-                    if idx >= 0 and str(idx) in self.metadata:
-                        entry = self.metadata[str(idx)]
-                        feature_id = entry['feature_id']
-                        
-                        # Filtrar por IDs permitidos si se proporcionaron
-                        if filter_ids and feature_id not in filter_ids:
-                            continue
-                        
-                        # Filtrar por clase de animal (perro con perro, gato con gato)
-                        if filter_class:
-                            stored_class = entry.get('metadata', {}).get('animal_class', None)
-                            if stored_class and stored_class != filter_class:
-                                continue
-                        
-                        # Filtrar por umbral de distancia máxima
-                        if dist <= Config.MAX_L2_DISTANCE:
-                            results.append((feature_id, float(dist)))
-                        
-                        # Si ya tenemos suficientes resultados, cortar
-                        if len(results) >= k:
-                            break
-                
+                processed_results = []
+                for hit in results:
+                    feature_id = hit.payload.get("feature_id", "")
+                    distance = hit.score
+                    processed_results.append((feature_id, float(distance)))
+
                 # Guardar en cache
                 if self.redis_client and query_hash:
                     try:
                         self.redis_client.setex(
-                            f"search:{query_hash}:{k}", 
+                            f"search:{query_hash}:{k}",
                             3600,  # 1 hora de cache
-                            json.dumps(results)
+                            json.dumps(processed_results),
                         )
-                    except:
+                    except Exception:
                         pass
-                
-                logger.debug(f"Búsqueda completada: {len(results)} resultados (filter_ids: {len(filter_ids) if filter_ids else 'none'}, filter_class: {filter_class or 'none'})")
-                return results
-                
+
+                logger.debug(
+                    f"Búsqueda completada: {len(processed_results)} resultados "
+                    f"(filter_ids: {len(filter_ids) if filter_ids else 'none'}, "
+                    f"filter_class: {filter_class or 'none'})"
+                )
+                return processed_results
+
             except Exception as e:
                 logger.error(f"Error en búsqueda: {e}")
                 raise
-    
+
     def remove_features(self, feature_ids: List[str]) -> Tuple[List[str], List[str]]:
         """
-        Elimina features del índice
-        
+        Elimina features de Qdrant
+
         Args:
-            feature_ids: Lista de IDs a eliminar
-            
+            feature_ids: Lista de feature_ids a eliminar
+
         Returns:
             (removed_ids, not_found_ids)
         """
         with self.lock:
             removed_ids = []
             not_found_ids = []
-            
-            # Identificar índices a eliminar
-            indices_to_remove = []
-            for internal_id, data in self.metadata.items():
-                if data['feature_id'] in feature_ids:
-                    indices_to_remove.append(int(internal_id))
-                    removed_ids.append(data['feature_id'])
-            
-            # Identificar IDs no encontrados
+
             for feature_id in feature_ids:
-                if feature_id not in removed_ids:
+                try:
+                    point_id = self._feature_id_to_uuid(feature_id)
+
+                    # Verificar si existe
+                    existing = self.qdrant.retrieve(
+                        collection_name=self.COLLECTION_NAME,
+                        ids=[point_id],
+                    )
+
+                    if existing:
+                        self.qdrant.delete(
+                            collection_name=self.COLLECTION_NAME,
+                            points_selector=[point_id],
+                        )
+                        removed_ids.append(feature_id)
+                    else:
+                        not_found_ids.append(feature_id)
+
+                except Exception as e:
+                    logger.warning(
+                        f"Error eliminando feature {feature_id}: {e}"
+                    )
                     not_found_ids.append(feature_id)
-            
-            if indices_to_remove:
-                # Para FAISS necesitamos reconstruir el índice sin los elementos eliminados
-                self._rebuild_index_without_indices(indices_to_remove)
-                
-                # Invalidar cache
-                if self.redis_client:
-                    try:
-                        self.redis_client.delete(f"search:*")
-                    except:
-                        pass
-                
-                logger.info(f"Eliminados {len(removed_ids)} features")
-            
+
+            # Invalidar cache
+            if self.redis_client and removed_ids:
+                try:
+                    self.redis_client.delete("search:*")
+                except Exception:
+                    pass
+
+            logger.info(f"Eliminados {len(removed_ids)} features de Qdrant")
             return removed_ids, not_found_ids
-    
-    def _rebuild_index_without_indices(self, indices_to_remove: List[int]):
-        """Reconstruye el índice excluyendo ciertos índices"""
-        try:
-            # Obtener todos los vectores actuales
-            all_vectors = []
-            new_metadata = {}
-            new_internal_id = 0
-            
-            for internal_id in range(self.index.ntotal):
-                if internal_id not in indices_to_remove:
-                    # Reconstruir vector desde el índice
-                    vector = self.index.reconstruct(internal_id)
-                    all_vectors.append(vector)
-                    
-                    # Actualizar metadata con nuevo ID
-                    if str(internal_id) in self.metadata:
-                        new_metadata[str(new_internal_id)] = self.metadata[str(internal_id)]
-                        new_internal_id += 1
-            
-            # Crear nuevo índice L2
-            self.index = faiss.IndexFlatL2(Config.FEATURE_DIMENSION)
-            self.metadata = new_metadata
-            
-            # Añadir vectores al nuevo índice
-            if all_vectors:
-                vectors_matrix = np.vstack(all_vectors)
-                self.index.add(vectors_matrix)
-            
-            # Guardar cambios
-            self._save_index()
-            
-        except Exception as e:
-            logger.error(f"Error reconstruyendo índice: {e}")
-            raise
-    
+
     def get_stats(self) -> Dict:
-        """Retorna estadísticas del índice"""
+        """Retorna estadísticas de la colección"""
         with self.lock:
-            return {
-                'total_vectors': self.index.ntotal,
-                'dimension': Config.FEATURE_DIMENSION,
-                'index_type': 'IndexFlatL2',
-                'metadata_count': len(self.metadata),
-                'redis_enabled': self.redis_client is not None
-            }
-    
-    # NOTA: No implementamos __del__ para guardar el índice.
-    # Durante el shutdown de Python, los built-ins (como open) ya no están
-    # disponibles, lo que causa "name 'open' is not defined" y puede
-    # corromper el índice guardando un estado vacío/parcial.
-    # _save_index() ya se llama después de cada add_feature() y remove_features(),
-    # por lo que los datos siempre están persistidos en disco.
+            try:
+                info = self.qdrant.get_collection(self.COLLECTION_NAME)
+                return {
+                    "total_vectors": info.points_count,
+                    "dimension": Config.FEATURE_DIMENSION,
+                    "index_type": "Qdrant (Euclid/L2)",
+                    "collection_name": self.COLLECTION_NAME,
+                    "status": str(info.status),
+                    "redis_enabled": self.redis_client is not None,
+                }
+            except Exception as e:
+                logger.error(f"Error obteniendo stats de Qdrant: {e}")
+                return {
+                    "total_vectors": 0,
+                    "dimension": Config.FEATURE_DIMENSION,
+                    "index_type": "Qdrant (Euclid/L2)",
+                    "collection_name": self.COLLECTION_NAME,
+                    "status": "error",
+                    "redis_enabled": self.redis_client is not None,
+                }

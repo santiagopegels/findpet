@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender1 \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -40,7 +41,7 @@ RUN apt-get update && apt-get install -y \
 RUN useradd --create-home --shell /bin/bash --uid 1000 appuser
 
 # Crear directorios necesarios
-RUN mkdir -p /app/images /app/features /app/models /app/logs /app/test-images /app/test-results \
+RUN mkdir -p /app/images /app/models /app/logs /app/test-images /app/test-results \
     && chown -R appuser:appuser /app
 
 # Cambiar a usuario no-root
@@ -74,7 +75,7 @@ RUN mkdir -p models
 # Verificar instalación de las nuevas dependencias
 RUN python -c "from ultralytics import YOLO; print('Ultralytics OK')" && \
     python -c "from sentence_transformers import SentenceTransformer; print('SentenceTransformers OK')" && \
-    python -c "import faiss; print('FAISS OK')" && \
+    python -c "from qdrant_client import QdrantClient; print('Qdrant Client OK')" && \
     python -c "import config; print('Configuration loaded successfully')"
 
 # Healthcheck
