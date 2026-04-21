@@ -18,6 +18,7 @@ WORKDIR /app
 
 # Copiar requirements y instalar dependencias Python
 COPY requirements.txt .
+RUN pip install --no-cache-dir --user torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # ========================
